@@ -1,0 +1,40 @@
+{
+  "name": "nostr-scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "nostr-scheduler": "./src/cli/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "custody:check": "node scripts/custody-check.mjs",
+    "demo:harness": "NOSTR_SCHEDULER_MODE=demo node src/demo/harness.ts",
+    "demo:local": "NOSTR_SCHEDULER_MODE=demo node src/demo/local.ts",
+    "criteria:validate": "node src/cli/main.ts criteria validate",
+    "start": "node src/cli/main.ts"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@scure/base": "^2.4.0",
+    "ws": "^8.18.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.0.8"
+  }
+}
