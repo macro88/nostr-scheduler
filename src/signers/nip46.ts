@@ -1,7 +1,13 @@
 import { hexPubkey, type HexPubkey, type RelayUrl, type UnixSeconds } from "../domain/brand.ts";
 import { assertSamePayload, parseSignedEvent } from "../domain/event.ts";
 import type { SignedEvent, Signer, UnsignedEvent } from "../domain/types.ts";
-import { bunkerRequest, loadOrCreateSession, type Session } from "./nip46-session.ts";
+import { bunkerRequest, loadOrCreateSession, type Session, type SessionLoadOptions } from "./nip46-session.ts";
+
+export const SIGN_EVENT_PERMISSION = "sign_event:1";
+
+export function connectParams(secret: string | null): readonly [string, string, string] {
+  return ["", secret ?? "", SIGN_EVENT_PERMISSION];
+}
 
 export type BunkerParts = {
   readonly pubkey: HexPubkey;
@@ -54,9 +60,10 @@ export async function connectBunker(args: {
   userPubkey: HexPubkey;
   sessionDir: string;
   now: () => UnixSeconds;
+  session?: SessionLoadOptions;
 }): Promise<Signer> {
   const parts = parseBunkerUri(args.bunkerUri);
-  const session: Session = loadOrCreateSession(args.sessionDir);
+  const session: Session = loadOrCreateSession(args.sessionDir, args.session);
   const call: Nip46Caller = (method, params) =>
     bunkerRequest({
       session,
@@ -66,10 +73,8 @@ export async function connectBunker(args: {
       params,
       createdAt: args.now(),
     });
-  if (parts.secret) {
-    const ack = await call("connect", ["", parts.secret]);
-    if (ack !== "ack") throw new Error("bunker did not acknowledge the connection");
-  }
+  const ack = await call("connect", connectParams(parts.secret));
+  if (ack !== "ack") throw new Error("bunker did not acknowledge the connection");
   const pubkey = await call("get_public_key", []);
   if (pubkey !== args.userPubkey) throw new Error("bunker pubkey does not match the profile");
   return createNip46Signer({ userPubkey: args.userPubkey, call });

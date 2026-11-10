@@ -40,10 +40,11 @@ function textOf(data: RawData): string {
 export async function startMockBunker(
   relay: RelayUrl,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ uri: string; pubkey: HexPubkey; close: () => void }> {
+): Promise<{ uri: string; pubkey: HexPubkey; permissions: string[]; close: () => void }> {
   const user = createMockSigner(env);
   const bunker = createSession();
   const connection = "demo-connection";
+  const permissions: string[] = [];
   const uri = `bunker://${bunker.pubkey}?relay=${encodeURIComponent(relay)}&secret=${connection}`;
   const ws = new WebSocket(relay);
   await new Promise<void>((resolve, reject) => {
@@ -70,8 +71,10 @@ export async function startMockBunker(
       const params = body.params ?? [];
       let result = "";
       if (body.method === "connect") {
-        const provided = params[1] || params[0];
-        if (provided !== connection) return;
+        const provided = params[1] ?? "";
+        const perms = params[2] ?? "";
+        permissions.push(perms);
+        if (provided !== connection || perms !== "sign_event:1" || /encrypt|decrypt/.test(perms)) return;
         result = "ack";
       } else if (body.method === "get_public_key") {
         result = user.pubkey;
@@ -94,6 +97,7 @@ export async function startMockBunker(
   return {
     uri,
     pubkey: user.pubkey,
+    permissions,
     close() {
       ws.close();
     },

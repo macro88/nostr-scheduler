@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { chacha20 } from "@noble/ciphers/chacha.js";
 import { equalBytes } from "@noble/ciphers/utils.js";
 import { secp256k1, schnorr } from "@noble/curves/secp256k1.js";
@@ -13,6 +13,7 @@ import { hexPubkey, type HexPubkey, type UnixSeconds } from "../domain/brand.ts"
 import { canonicalId, parseRawEvent } from "../domain/event.ts";
 import { assertRelayAllowed } from "../domain/relays.ts";
 import type { EventTag, RelayUrl } from "../domain/types.ts";
+import { openKeychainStore, type SessionStore } from "./session-store.ts";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -94,24 +95,101 @@ export function createSession(): Session {
   return { secretKey, pubkey: hexPubkey(bytesToHex(schnorr.getPublicKey(secretKey))) };
 }
 
-export function loadOrCreateSession(dir: string): Session {
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const path = join(dir, "client.json");
+export function fileSessionWarning(path: string): string {
+  return `warning: session key stored in ${path} with mode 0600. Anyone who can read this file can ask the bunker for signatures. Prefer the OS keychain.`;
+}
+
+export type SessionLoadOptions = {
+  store?: SessionStore;
+  allowFile?: boolean;
+  keychain?: (dir: string) => SessionStore | null;
+  warn?: (message: string) => void;
+};
+
+function legacyPath(dir: string): string {
+  return join(dir, "client.json");
+}
+
+function readLegacyHex(dir: string): string | null {
   let raw: string | null = null;
   try {
-    raw = readFileSync(path, "utf8");
+    raw = readFileSync(legacyPath(dir), "utf8");
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
-  }
-  if (raw === null) {
-    const session = createSession();
-    writeFileSync(path, JSON.stringify({ secretKey: bytesToHex(session.secretKey) }), { mode: 0o600 });
-    return session;
+    return null;
   }
   const parsed = JSON.parse(raw) as { secretKey?: string };
   if (!parsed.secretKey || !/^[0-9a-f]{64}$/.test(parsed.secretKey)) throw new Error("bad session file");
-  const secretKey = hexToBytes(parsed.secretKey);
+  return parsed.secretKey;
+}
+
+function writeLegacyHex(dir: string, hex: string): void {
+  const path = legacyPath(dir);
+  writeFileSync(path, JSON.stringify({ secretKey: hex }), { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
+function fileSessionStore(dir: string): SessionStore {
+  return {
+    read() {
+      return readLegacyHex(dir);
+    },
+    write(value) {
+      writeLegacyHex(dir, value);
+    },
+    delete() {
+      rmSync(legacyPath(dir), { force: true });
+    },
+  };
+}
+
+function sessionFromHex(hex: string): Session {
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error("stored session is unreadable");
+  const secretKey = hexToBytes(hex);
   return { secretKey, pubkey: hexPubkey(bytesToHex(schnorr.getPublicKey(secretKey))) };
+}
+
+export function writeLegacySessionFile(dir: string, session: Session): string {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeLegacyHex(dir, bytesToHex(session.secretKey));
+  return legacyPath(dir);
+}
+
+function chooseStore(dir: string, options: SessionLoadOptions): { store: SessionStore; usingFile: boolean } {
+  if (options.store) return { store: options.store, usingFile: false };
+  const allowFile = options.allowFile === true || process.env.NOSTR_SCHEDULER_ALLOW_FILE_SESSION === "1";
+  const opened = (options.keychain ?? openKeychainStore)(resolve(dir));
+  if (opened) return { store: opened, usingFile: false };
+  if (allowFile) return { store: fileSessionStore(dir), usingFile: true };
+  throw new Error(
+    "no keychain is available. Pass --allow-file-session or set NOSTR_SCHEDULER_ALLOW_FILE_SESSION=1 to store the session key in a mode 0600 file.",
+  );
+}
+
+export function loadOrCreateSession(dir: string, options: SessionLoadOptions = {}): Session {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const { store, usingFile } = chooseStore(dir, options);
+  if (usingFile) (options.warn ?? ((message) => console.error(message)))(fileSessionWarning(legacyPath(dir)));
+  const legacy = readLegacyHex(dir);
+  if (legacy && !usingFile) {
+    if (!store.read()) store.write(legacy);
+    rmSync(legacyPath(dir), { force: true });
+  }
+  const existing = store.read();
+  if (existing) return sessionFromHex(existing);
+  const created = createSession();
+  store.write(bytesToHex(created.secretKey));
+  return created;
+}
+
+export function wipeSession(dir: string, options: SessionLoadOptions = {}): void {
+  const store = options.store ?? (options.keychain ?? openKeychainStore)(resolve(dir));
+  try {
+    store?.delete();
+  } catch {
+    // A missing keychain still leaves the file to remove.
+  }
+  rmSync(legacyPath(dir), { force: true });
 }
 
 export function signKind24133(args: {

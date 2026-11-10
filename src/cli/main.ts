@@ -13,6 +13,8 @@ import { loadProfiles } from "../profiles/load.ts";
 import { publishDue } from "../publisher/publish.ts";
 import { signApproved, systemNow } from "../signers/batch.ts";
 import { connectBunker } from "../signers/nip46.ts";
+import { wipeSession } from "../signers/nip46-session.ts";
+import { signedEventsOf } from "../domain/types.ts";
 import { openNip07 } from "../signers/nip07.ts";
 import { createNip55Signer } from "../signers/nip55.ts";
 import { publishToRelay } from "../test-relay/client.ts";
@@ -31,7 +33,7 @@ function profileFor(profiles: readonly Profile[], id: string): Profile {
   return found;
 }
 
-async function signerFor(profile: Profile, dataDir: string): Promise<Signer> {
+async function signerFor(profile: Profile, dataDir: string, allowFileFlag = false): Promise<Signer> {
   if (profile.signer.kind === "mock") {
     throw new Error("the mock signer stays inside the local demo and does not keep an account key");
   }
@@ -56,7 +58,12 @@ async function signerFor(profile: Profile, dataDir: string): Promise<Signer> {
     userPubkey: profile.pubkey,
     sessionDir: join(dataDir, "nip46"),
     now: systemNow,
+    session: { allowFile: allowFileFlag || allowFileSession() },
   });
+}
+
+function allowFileSession(): boolean {
+  return process.env.NOSTR_SCHEDULER_ALLOW_FILE_SESSION === "1";
 }
 
 function editedDraft(current: Draft, content: string, segment: string | undefined): Draft {
@@ -80,12 +87,15 @@ async function main(): Promise<void> {
       content: { type: "string" },
       segment: { type: "string" },
       watch: { type: "boolean", default: false },
+      "allow-file-session": { type: "boolean", default: false },
     },
   });
   const dataDir = resolve(values.data ?? "data");
   const [command, first, second] = positionals;
   if (!command || command === "help") {
-    console.log("commands: criteria validate <file> | status | approve <id> | reject <id> | edit <id> | sign [id] | publish | mcp");
+    console.log(
+      "commands: criteria validate <file> | status | approve <id> | reject <id> | edit <id> | sign [id] | publish | mcp | disconnect",
+    );
     return;
   }
   if (command === "criteria" && first === "validate") {
@@ -94,11 +104,29 @@ async function main(): Promise<void> {
     console.log(`${criteria.profileId} ${criteria.version}`);
     return;
   }
+  if (command === "disconnect") {
+    wipeSession(join(dataDir, "nip46"), {
+      allowFile: values["allow-file-session"] === true || allowFileSession(),
+    });
+    console.log("session key removed");
+    return;
+  }
   const { profiles, store } = openData(dataDir);
   const now = () => unixSeconds(Math.floor(Date.now() / 1000));
   try {
     if (command === "status") {
-      for (const item of store.list()) console.log(`${item.id} ${item.profileId} ${item.status}`);
+      for (const item of store.list()) {
+        console.log(`${item.id} ${item.profileId} ${item.status}`);
+        for (const event of signedEventsOf(item) ?? []) {
+          console.log(`  event ${event.id} created_at ${event.created_at}`);
+        }
+        if (item.status === "sent" || item.status === "failed") {
+          for (const result of item.results) {
+            console.log(`  ${result.accepted ? "accepted" : "failed"} ${result.relay} ${result.message}`);
+          }
+        }
+        if (item.status === "missed") console.log(`  missed by ${item.lateBySeconds}s`);
+      }
       return;
     }
     if (command === "mcp") {
@@ -129,7 +157,7 @@ async function main(): Promise<void> {
         const item = store.get(id);
         if (item.status !== "approved") throw new Error(`cannot sign a ${item.status} item`);
         const profile = profileFor(profiles, item.profileId);
-        const signer = await signerFor(profile, dataDir);
+        const signer = await signerFor(profile, dataDir, values["allow-file-session"] === true);
         const signed = await signApproved({
           signer,
           item,

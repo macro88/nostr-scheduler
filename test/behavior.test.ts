@@ -13,7 +13,8 @@ import { MCP_TOOL_NAMES } from "../src/domain/types.ts";
 import { loadProfiles } from "../src/profiles/load.ts";
 import { publishDue, virtualClock } from "../src/publisher/publish.ts";
 import { signApproved } from "../src/signers/batch.ts";
-import { connectBunker, createNip46Signer } from "../src/signers/nip46.ts";
+import { connectBunker, connectParams, createNip46Signer } from "../src/signers/nip46.ts";
+import { memorySessionStore } from "../src/signers/session-store.ts";
 import { nip44SelfCheck } from "../src/signers/nip46-session.ts";
 import { openNip07 } from "../src/signers/nip07.ts";
 import { createNip55Signer } from "../src/signers/nip55.ts";
@@ -245,11 +246,14 @@ describe("nip46", () => {
         userPubkey: bunker.pubkey,
         sessionDir: join(tempDir(), "nip46"),
         now: () => now,
+        session: { store: memorySessionStore(), keychain: () => null },
       });
       const unsigned = noteUnsigned({ pubkey: bunker.pubkey, content: "remote", createdAt: unixSeconds(now + 5) });
       const signed = await signer.signEvent(unsigned);
       expect(signed.content).toBe("remote");
       expect(signed.pubkey).toBe(bunker.pubkey);
+      expect(bunker.permissions).toEqual(["sign_event:1"]);
+      expect(connectParams("token").join(" ")).not.toMatch(/encrypt|decrypt/);
     } finally {
       bunker.close();
       await relay.stop();

@@ -32,7 +32,7 @@ The queue and the publisher depend on signed events and relay URLs. Criteria sta
 Every adapter takes an unsigned kind-1 event and returns a signed one. Callers check the id, the signature, and that the payload still matches before the queue will store it.
 
 - NIP-07. Node cannot see `window.nostr`. The app binds `127.0.0.1`, serves one page, and that page calls `window.nostr.signEvent`. The page has no field for a secret. If no signer is present, the page says so and the session fails.
-- NIP-46. The profile stores a `bunker://` URI. During review the app talks to that bunker over the relays in the URI. A pairing secret in the URI is a connection token. The session key that encrypts that traffic lives only in `src/signers/nip46-session.ts` and in `data/nip46/client.json` (mode `0600`). It is not an account key, and that file is not allowed to contain an `nsec`.
+- NIP-46. The profile stores a `bunker://` URI. During review the app talks to that bunker over the relays in the URI. A pairing secret in the URI is a connection token. The session key that encrypts that traffic is created in `src/signers/nip46-session.ts`. It is stored in the OS keychain. A mode `0600` file is used only after an explicit opt-in, and an old file is moved into the keychain and deleted. The connect request asks only for `sign_event` on kind 1.
 - NIP-55. This is an Android intent flow. On a desktop the adapter refuses and tells you to use a bunker.
 
 Batch signing walks approved items in order. A thread is signed root first. Each reply is built with the signed root id, then signed. `created_at` is the scheduled time.
@@ -68,7 +68,7 @@ data/profiles.yaml
 data/criteria/<id>.md
 data/criteria/<id>.feedback.yaml
 data/app.sqlite
-data/nip46/client.json
+data/nip46/client.json    # only when file storage was explicitly opted in
 ```
 
 The demo uses `data/demo/` and a throwaway key that is not written into that directory.

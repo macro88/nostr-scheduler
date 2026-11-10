@@ -16,7 +16,15 @@ You sign with a signer you already use.
 
 A mock signer exists for tests and the local demo only. It generates a throwaway key in memory and will not attach to a profile outside test or demo mode. The demo does not keep that key on disk.
 
-A bunker connection stores a session key under `data/nip46/` with mode `0600`. That key only encrypts traffic to the bunker. It is not an `nsec`.
+A bunker connection keeps a session key so it can talk to the bunker. That key is not an `nsec`. It cannot sign a post by itself. It can only ask the bunker to sign, and the connect request asks for `sign_event` on kind 1 alone. It does not ask for encrypt or decrypt permission.
+
+By default the session key is stored in the OS keychain: macOS Keychain, Secret Service on Linux, or Windows Credential Manager. If no keychain is available, pairing stops. Pass `--allow-file-session`, or set `NOSTR_SCHEDULER_ALLOW_FILE_SESSION=1`, to store it in `data/nip46/client.json` with mode `0600` instead. The app prints a warning when it does that. Anyone who can read that file can ask the bunker for signatures within the permissions the bunker granted.
+
+An existing `client.json` is copied into the keychain and then deleted.
+
+Leave per-request approval on in Amber or Hypergolic. The session key is then not enough on its own. The bunker still asks you before each signature.
+
+`node src/cli/main.ts disconnect` removes the session key from the keychain and deletes `client.json`.
 
 `pnpm custody:check` fails if account-secret handling appears outside the mock signer. The bunker session module is the only other file allowed to hold a connection key, and it still cannot mention an `nsec`.
 
@@ -65,6 +73,7 @@ node src/cli/main.ts edit <id> --content "..."
 node src/cli/main.ts sign
 node src/cli/main.ts publish
 node src/cli/main.ts mcp
+node src/cli/main.ts disconnect
 ```
 
 `sign` signs every approved item, root first for a thread, then queues the signed events. `publish` sends due events and will not send early. `publish --watch` repeats that check once a second. `mcp` speaks newline-delimited JSON-RPC on standard input.
