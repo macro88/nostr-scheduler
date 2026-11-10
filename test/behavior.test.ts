@@ -136,6 +136,8 @@ describe("inbox and signing", () => {
       at: now,
     });
     expect(store.transition(rejected.id, { type: "reject", reason: "no-go topic" }, now, profile).status).toBe("rejected");
+    expect(store.get(rejected.id).status).toBe("rejected");
+    expect(store.list().some((item) => item.status === "rejected")).toBe(true);
     const feedback = readFeedback(feedbackPath(profile.criteriaPath, profile.id));
     expect(feedback.map((entry) => entry.action)).toEqual(["edited", "approved", "rejected"]);
     if (approved.status !== "approved") return;

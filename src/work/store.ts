@@ -41,27 +41,27 @@ export function parseWorkItem(value: unknown): WorkItem {
   const id = suggestionId(String(value.id));
   const profile = profileId(String(value.profileId));
   const base = { id, profileId: profile };
-  if (value.status === "suggestion" || value.status === "approved" || value.status === "rejected") {
+  if (value.status === "suggestion" || value.status === "approved") {
     const draft = parseDraft(value.draft);
     const suggester = suggesterId(String(value.suggesterId));
     const createdAt = unixSeconds(Number(value.createdAt));
     if (value.status === "suggestion") {
       return { ...base, status: "suggestion", suggesterId: suggester, draft, createdAt, rationale: String(value.rationale ?? "") };
     }
-    if (value.status === "approved") {
-      return {
-        ...base,
-        status: "approved",
-        suggesterId: suggester,
-        draft,
-        createdAt,
-        approvedAt: unixSeconds(Number(value.approvedAt)),
-      };
-    }
+    return {
+      ...base,
+      status: "approved",
+      suggesterId: suggester,
+      draft,
+      createdAt,
+      approvedAt: unixSeconds(Number(value.approvedAt)),
+    };
+  }
+  if (value.status === "rejected") {
     return {
       ...base,
       status: "rejected",
-      draft,
+      draft: parseDraft(value.draft),
       rejectedAt: unixSeconds(Number(value.rejectedAt)),
       reason: String(value.reason ?? ""),
     };
