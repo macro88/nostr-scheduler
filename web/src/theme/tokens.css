@@ -14,6 +14,7 @@
   --color-border: #c5cdc8;
   --color-border-strong: #68716a;
   --color-focus: #0c5548;
+  --color-skeleton: #d8e0dc;
   --color-scrim: rgb(20 26 24 / 40%);
   --status-failed-fg: #7a2428;
   --status-failed-bg: #f0d9d8;
@@ -26,10 +27,11 @@
   --font-note: "Literata";
   --font-mono: "IBM Plex Mono";
   --radius-control: 4px;
+  --radius-field: 4px;
   --radius-panel: 8px;
   --radius-badge: 999px;
-  --radius-menu: 8px;
-  --radius-avatar: 999px;
+  --radius-overlay: 8px;
+  --radius-full: 999px;
   --header-h: 56px;
   --chop: 6px;
   --motion-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -51,6 +53,7 @@
   --color-border: #2a322f;
   --color-border-strong: #7e807a;
   --color-focus: #5b9e8a;
+  --color-skeleton: #242c29;
   --color-scrim: rgb(0 0 0 / 62%);
   --status-failed-fg: #e8a8a4;
   --status-failed-bg: #3a2424;
