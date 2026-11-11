@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { pushOnto } from "./toast-stack";
 
 export type ToastInput = {
@@ -24,7 +24,34 @@ export function useToasts(): ToastApi {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const stack = useRef<Toast[]>([]);
+  const stackNode = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
+
+  useLayoutEffect(() => {
+    const node = stackNode.current;
+    const clear = () => {
+      document.documentElement.style.scrollPaddingBottom = "";
+      document.body.style.paddingBottom = "";
+    };
+    if (!node || toasts.length === 0) {
+      clear();
+      return;
+    }
+    const apply = () => {
+      const inset = Math.max(0, Math.ceil(window.innerHeight - node.getBoundingClientRect().top));
+      document.documentElement.style.scrollPaddingBottom = `${inset}px`;
+      document.body.style.paddingBottom = `${inset}px`;
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    window.addEventListener("resize", apply);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", apply);
+      clear();
+    };
+  }, [toasts]);
 
   const dismiss = useCallback((id: number) => {
     stack.current = stack.current.filter((toast) => toast.id !== id);
@@ -41,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ push }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2" aria-live="polite">
+      <div ref={stackNode} className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2" aria-live="polite">
         {toasts.map((toast) => (
           <ToastCard key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />
         ))}
@@ -73,7 +100,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       role="status"
       data-testid={`toast-${toast.kind}`}
       tabIndex={0}
-      className="pointer-events-auto w-full max-w-md rounded-2xl border border-[#d9d3c7] bg-white px-4 py-3 text-sm shadow-sm"
+      className="pointer-events-auto w-full max-w-md rounded-2xl border border-[#8a8478] bg-white px-4 py-3 text-sm shadow-sm"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
