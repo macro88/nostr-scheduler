@@ -16,9 +16,9 @@ const skipDirs = new Set([
 ]);
 const textExt = new Set([".css", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".html", ".svg", ".yml", ".yaml"]);
 
-function accentHexes(css: string): string[] {
+function hexesFor(css: string, name: string): string[] {
   const found = new Set<string>();
-  const pattern = /--color-(?:accent(?:-fg)?|focus)\s*:\s*(#[0-9a-fA-F]{6})/g;
+  const pattern = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{6})`, "g");
   for (const match of css.matchAll(pattern)) {
     const hex = match[1]?.toLowerCase();
     if (!hex || hex === "#ffffff" || hex === "#000000") continue;
@@ -26,6 +26,8 @@ function accentHexes(css: string): string[] {
   }
   return [...found];
 }
+
+const retiredGreen = ["0c5548", "5b9e8a", "e4e9e6"].map((value) => `#${value}`);
 
 function channels(hex: string): [number, number, number] {
   return [
@@ -83,12 +85,12 @@ function files(dir: string): string[] {
   return out;
 }
 
-function hits(hexes: readonly string[]): string[] {
+function hits(hexes: readonly string[], includeTokenFile = false): string[] {
   const patterns = needles(hexes);
   const found: string[] = [];
   for (const path of files(root)) {
     const rel = relative(root, path).split(sep).join("/");
-    if (rel === tokenFile) continue;
+    if (!includeTokenFile && rel === tokenFile) continue;
     const source = readFileSync(path, "utf8");
     const lines = source.split("\n");
     lines.forEach((line, index) => {
@@ -100,21 +102,28 @@ function hits(hexes: readonly string[]): string[] {
 
 describe("accent token", () => {
   const css = readFileSync(join(root, tokenFile), "utf8");
-  const hexes = accentHexes(css);
+  const accents = hexesFor(css, "color-accent");
+  const accentFg = hexesFor(css, "color-accent-fg");
 
   test("the accent hex is declared once per theme", () => {
-    expect(hexes).toHaveLength(2);
-    expect(new Set(hexes).size).toBe(2);
+    expect(accents).toHaveLength(2);
+    expect(new Set(accents).size).toBe(2);
   });
 
   test("an accent hex outside the token file is noticed", () => {
-    const sample = hexes[0] ?? "";
-    expect(needles(hexes).some((pattern) => pattern.test(`color: ${sample}`))).toBe(true);
+    const sample = accents[0] ?? "";
+    expect(needles(accents).some((pattern) => pattern.test(`color: ${sample}`))).toBe(true);
     const [red, green, blue] = channels(sample);
-    expect(needles(hexes).some((pattern) => pattern.test(`rgb(${red}, ${green}, ${blue})`))).toBe(true);
+    expect(needles(accents).some((pattern) => pattern.test(`rgb(${red}, ${green}, ${blue})`))).toBe(true);
+    const retired = retiredGreen[0] ?? "";
+    expect(needles(retiredGreen).some((pattern) => pattern.test(retired))).toBe(true);
   });
 
   test("accent values stay in the theme token file", () => {
-    expect(hits(hexes)).toEqual([]);
+    expect(hits([...accents, ...accentFg])).toEqual([]);
+  });
+
+  test("retired green values are gone", () => {
+    expect(hits(retiredGreen, true)).toEqual([]);
   });
 });
