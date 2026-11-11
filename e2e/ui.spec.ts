@@ -139,7 +139,7 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   await page.getByTestId("nav-log").click();
   const logged = page.getByTestId("log-item").filter({ hasText: marker });
   await expect(logged.getByTestId("relay-result").first()).toContainText("Accepted on the local relay.");
-  await expect(logged.getByTestId("relay-result").first()).not.toContainText("Technical detail");
+  await expect(page.getByTestId("log").locator("summary")).toHaveCount(0);
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/sent-log.png", fullPage: true });
   await relay.stop();
 });
