@@ -1459,14 +1459,17 @@ nav { flex-wrap: wrap; }
     align-content: start;
     align-items: start;
     position: absolute;
-    inset: 0;
+    top: 4px;
+    right: 6px;
+    bottom: 5px;
+    left: 6px;
     overflow: hidden;
   }
   .wevt .wevt-excerpt {
     display: block;
     -webkit-line-clamp: unset;
     -webkit-box-orient: unset;
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 2;
     min-width: 0;
     margin: 2px 0 0;

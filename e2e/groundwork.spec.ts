@@ -332,14 +332,16 @@ test("a phone week card shows an excerpt only when it is at least 44px", async (
   });
   const excerpt = card.locator(".wevt-excerpt");
   await expect(excerpt).toBeVisible();
-  const clearOfStatus = await card.evaluate((node) => {
+  const fits = await card.evaluate((node) => {
     const line = node.querySelector(".wevt-excerpt")?.getBoundingClientRect();
     const status = node.querySelector(".status, .status-flag")?.getBoundingClientRect();
     if (!line || !status) return false;
+    const style = getComputedStyle(node);
+    const contentRight = node.getBoundingClientRect().right - Number.parseFloat(style.paddingRight) - Number.parseFloat(style.borderRightWidth);
     const overlaps = line.left < status.right - 1 && line.right > status.left + 1 && line.top < status.bottom - 1 && line.bottom > status.top + 1;
-    return !overlaps;
+    return Math.abs(line.right - contentRight) <= 1 && !overlaps;
   });
-  expect(clearOfStatus).toBe(true);
+  expect(fits).toBe(true);
   await card.evaluate((node) => {
     node.style.height = "32px";
     node.style.maxHeight = "32px";
