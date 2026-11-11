@@ -11,7 +11,6 @@
     "nostr-scheduler": "./src/cli/main.ts"
   },
   "scripts": {
-    "postinstall": "node scripts/sync-theme.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -20,7 +19,7 @@
     "demo:local": "NOSTR_SCHEDULER_MODE=demo node src/demo/local.ts",
     "criteria:validate": "node src/cli/main.ts criteria validate",
     "start": "node src/cli/main.ts",
-    "ui": "node scripts/sync-theme.mjs && vite build --config web/vite.config.ts && node src/http/serve.ts",
+    "ui": "vite build --config web/vite.config.ts && node src/http/serve.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
