@@ -9,6 +9,17 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #1c1b17;
+  outline-offset: 2px;
+}
+
+::placeholder {
+  color: #5c564c;
+  opacity: 1;
 }

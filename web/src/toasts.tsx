@@ -1,0 +1,107 @@
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+export type ToastInput = {
+  kind: "success" | "error" | "undo";
+  message: string;
+  detail?: string;
+  onUndo?: () => void;
+  onExpire?: () => void;
+};
+
+type Toast = ToastInput & { id: number };
+
+type ToastApi = {
+  push: (toast: ToastInput) => void;
+};
+
+const ToastContext = createContext<ToastApi>({ push: () => undefined });
+
+export function useToasts(): ToastApi {
+  return useContext(ToastContext);
+}
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const nextId = useRef(1);
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const push = useCallback((toast: ToastInput) => {
+    const id = nextId.current;
+    nextId.current += 1;
+    setToasts((current) => [...current, { ...toast, id }].slice(-3));
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ push }}>
+      {children}
+      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2" aria-live="polite">
+        {toasts.map((toast) => (
+          <ToastCard key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
+  const remaining = useRef(toast.kind === "error" ? 0 : toast.kind === "undo" ? 6000 : 4000);
+  const started = useRef(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (toast.kind === "error" || paused) return;
+    started.current = Date.now();
+    const timer = setTimeout(() => {
+      toast.onExpire?.();
+      onDismiss();
+    }, remaining.current);
+    return () => {
+      clearTimeout(timer);
+      remaining.current = Math.max(0, remaining.current - (Date.now() - started.current));
+    };
+  }, [paused, toast, onDismiss]);
+
+  return (
+    <div
+      role="status"
+      data-testid={`toast-${toast.kind}`}
+      tabIndex={0}
+      className="pointer-events-auto w-full max-w-md rounded-2xl border border-[#d9d3c7] bg-white px-4 py-3 text-sm shadow-sm"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <p>{toast.message}</p>
+      {toast.detail ? (
+        <details className="mt-1 text-[#5c564c]">
+          <summary>Technical detail</summary>
+          <p>{toast.detail}</p>
+        </details>
+      ) : null}
+      <div className="mt-2 flex gap-2">
+        {toast.onUndo ? (
+          <button
+            type="button"
+            data-testid="undo"
+            className="underline"
+            onClick={() => {
+              toast.onUndo?.();
+              onDismiss();
+            }}
+          >
+            Undo
+          </button>
+        ) : null}
+        {toast.kind === "error" ? (
+          <button type="button" className="underline" onClick={onDismiss}>
+            Dismiss
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
