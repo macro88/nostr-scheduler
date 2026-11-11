@@ -26,23 +26,20 @@ const buttonVariants = cva(
   },
 );
 
-export function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
+export const Button = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants> & { asChild?: boolean }
+>(function Button({ className, variant, size, asChild = false, ...props }, ref) {
   const Comp = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
-}
+  return <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+});
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
       className={cn(
-        "h-10 w-full rounded-xl border border-[#d9d3c7] bg-white px-3 text-sm outline-none focus:border-[#1c1b17]",
+        "h-10 w-full rounded-xl border border-[#8a8478] bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]",
         props.className,
       )}
     />
@@ -55,7 +52,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
       ref={ref}
       {...props}
       className={cn(
-        "min-h-28 w-full rounded-2xl border border-[#d9d3c7] bg-white px-4 py-3 text-[15px] leading-6 outline-none focus:border-[#1c1b17]",
+        "min-h-28 w-full rounded-2xl border border-[#8a8478] bg-white px-4 py-3 text-[15px] leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]",
         props.className,
       )}
     />

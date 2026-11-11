@@ -138,6 +138,83 @@ test("empty, loading, and error states", async ({ page }) => {
   await relay.stop();
 });
 
+test("single-key shortcuts turn off and stay out of text fields", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  profileFile(signer, url);
+  await page.goto("/");
+  await clear(page);
+  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  await post(page, "/api/suggestions", {
+    profileId: "demo",
+    rationale: "keys",
+    draft: { type: "note", content: "Shortcut note", proposedFireAt: fireAt },
+  });
+  await page.reload();
+  await page.getByTestId("profile").focus();
+  await page.keyboard.press("2");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inbox");
+  await page.getByTestId("shortcuts").uncheck();
+  await page.getByTestId("suggestion").focus();
+  await page.keyboard.press("a");
+  await expect(page.getByTestId("toast-success")).toHaveCount(0);
+  await expect(page.getByText("Shortcut note")).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("shortcuts")).not.toBeChecked();
+  await page.getByTestId("shortcuts").check();
+  await page.getByTestId("suggestion").focus();
+  await page.keyboard.press("a");
+  await expect(page.getByTestId("toast-success")).toContainText("Approved");
+  await relay.stop();
+});
+
+test("discarding a queued item asks first and escape returns to discard", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  profileFile(signer, url);
+  await page.exposeFunction("__nostrSign", (event: Parameters<typeof signer.signEvent>[0]) => signer.signEvent(event));
+  await page.addInitScript(() => {
+    const target = window as Window & {
+      nostr?: { signEvent: (event: unknown) => Promise<unknown> };
+      __nostrSign?: (event: unknown) => Promise<unknown>;
+    };
+    target.nostr = {
+      signEvent: (event) => {
+        if (!target.__nostrSign) throw new Error("missing signer");
+        return target.__nostrSign(event);
+      },
+    };
+  });
+  await page.goto("/");
+  await clear(page);
+  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  await post(page, "/api/compose", {
+    profileId: "demo",
+    draft: { type: "note", content: "Queued for discard", proposedFireAt: fireAt },
+  });
+  await page.getByTestId("nav-sign").click();
+  await page.getByTestId("sign-browser").click();
+  await expect(page.getByTestId("sign-status")).toContainText("Queued");
+  await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("calendar-item").filter({ hasText: "Queued for discard" }).click();
+  await expect(page.getByTestId("frozen-note")).toBeVisible();
+  await page.getByTestId("discard").click();
+  const dialog = page.getByTestId("confirm-discard");
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId("confirm-remove")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Keep" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("confirm-remove")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("calendar-detail")).toBeVisible();
+  await expect(page.getByTestId("discard")).toBeFocused();
+  await relay.stop();
+});
+
 test("axe finds no serious or critical issues", async ({ page }) => {
   const relay = new LocalRelay();
   const url = await relay.start();

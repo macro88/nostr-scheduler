@@ -80,27 +80,61 @@ export function Calendar({ profileId }: { profileId: string }) {
     mutationFn: () => api("/api/publish", { method: "POST", body: "{}" }),
     onSuccess: () => void queryClient.invalidateQueries(),
   });
-  const frozen = selected ? ["signed", "queued", "sent", "failed", "missed"].includes(selected.status) : false;
+  const canDiscard = selected?.status === "queued" || selected?.status === "signed";
+  const canMove = selected?.status === "approved";
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const confirmingRef = useRef(false);
+  confirmingRef.current = confirming;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelected(null);
+      if (event.key !== "Escape") return;
+      if (confirmingRef.current) {
+        event.preventDefault();
         setConfirming(false);
+        return;
       }
+      setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
+    if (confirming) return;
     detailRef.current?.querySelector<HTMLElement>("input, button")?.focus();
-  }, [selected?.id]);
+  }, [selected?.id, confirming]);
   useEffect(() => {
     if (!confirming) return;
-    detailRef.current?.querySelector<HTMLElement>("[data-testid='confirm-remove']")?.focus();
+    const dialog = dialogRef.current;
+    const focusable = () =>
+      dialog
+        ? [...dialog.querySelectorAll<HTMLElement>("button, [href], input, select, textarea")].filter((node) => !node.hasAttribute("disabled"))
+        : [];
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      discardRef.current?.focus();
+    };
   }, [confirming]);
 
   return (
     <section data-testid="calendar" aria-label="Queue">
+      <div inert={confirming ? true : undefined}>
       <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex gap-2">
           <Button variant="outline" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
@@ -191,28 +225,15 @@ export function Calendar({ profileId }: { profileId: string }) {
             <p className="text-sm text-[#5c564c]">{selected.fireAt[0] ? formatWhen(selected.fireAt[0]) : ""}</p>
           </div>
           <p className="mt-3 whitespace-pre-wrap">{selected.preview}</p>
-          {frozen ? (
+          {canDiscard ? (
             <div className="mt-4">
               <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
-              {confirming ? (
-                <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" data-testid="confirm-discard" className="mt-3">
-                  <p id="confirm-title">Remove this item from the queue?</p>
-                  <div className="mt-2 flex gap-2">
-                    <Button data-testid="confirm-remove" onClick={() => discard.mutate()}>
-                      Remove
-                    </Button>
-                    <Button variant="outline" onClick={() => setConfirming(false)}>
-                      Keep
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button className="mt-3" variant="outline" data-testid="discard" onClick={() => setConfirming(true)}>
-                  Discard
-                </Button>
-              )}
+              <Button ref={discardRef} className="mt-3" variant="outline" data-testid="discard" onClick={() => setConfirming(true)}>
+                Discard
+              </Button>
             </div>
-          ) : (
+          ) : null}
+          {canMove ? (
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Input data-testid="reschedule" aria-label="New time" type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} />
               <Button data-testid="save-time" onClick={() => reschedule.mutate()} disabled={!when}>
@@ -222,8 +243,29 @@ export function Calendar({ profileId }: { profileId: string }) {
                 Remove
               </Button>
             </div>
-          )}
+          ) : null}
           {reschedule.error || discard.error ? <InlineError error={reschedule.error ?? discard.error} /> : null}
+        </div>
+      ) : null}
+      </div>
+      {confirming && canDiscard ? (
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-title"
+          data-testid="confirm-discard"
+          className="mt-4 rounded-3xl border border-[#e4dfd4] bg-white p-5"
+        >
+          <p id="confirm-title">Discard this item from the queue?</p>
+          <div className="mt-3 flex gap-2">
+            <Button data-testid="confirm-remove" onClick={() => discard.mutate()}>
+              Discard
+            </Button>
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Keep
+            </Button>
+          </div>
         </div>
       ) : null}
     </section>
