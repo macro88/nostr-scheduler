@@ -247,12 +247,13 @@ export function Calendar({ profileId }: { profileId: string }) {
               ))}
             </div>
             <div className="hour-gutter" aria-hidden="true">
-              {Array.from({ length: span }, (_, index) => {
+              {Array.from({ length: span + 1 }, (_, index) => {
                 const hour = openHour + index;
-                const collide = showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) <= 20;
+                const atEnd = index === span;
+                const collide = !atEnd && showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) <= 20;
                 if (collide) return null;
                 return (
-                  <span key={hour} style={{ top: `${(index / span) * 100}%` }}>
+                  <span key={hour} className={atEnd ? "is-end" : undefined} style={{ top: `${(index / span) * 100}%` }}>
                     {String(hour).padStart(2, "0")}:00
                   </span>
                 );
@@ -305,7 +306,7 @@ export function Calendar({ profileId }: { profileId: string }) {
                   <p className={`hour-label${nearLabel ? " is-now" : ""}`}>{`${String(hour).padStart(2, "0")}:00`}</p>
                   <div className="hour-lane">
                     {showNow ? (
-                      <div className="now-line" style={{ top: `${(now.getMinutes() / 60) * 100}%` }} aria-label={`Now, ${formatWhen(now)}`}>
+                      <div className="now-line" style={{ top: (now.getMinutes() / 60) * 48 }} aria-label={`Now, ${formatWhen(now)}`}>
                         <span>
                           {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
                         </span>
@@ -317,13 +318,19 @@ export function Calendar({ profileId }: { profileId: string }) {
                         const date = new Date(item.fireAt[0] * 1000);
                         return sameLocalDay(date, cursor) && date.getHours() === hour;
                       })
-                      .map((item) => (
+                      .map((item) => {
+                        const date = new Date((item.fireAt[0] ?? 0) * 1000);
+                        const track = 48;
+                        const at = (date.getMinutes() / 60) * track;
+                        const line = showNow ? (now.getMinutes() / 60) * track : -1;
+                        const marginTop = line >= 0 && at <= line ? line + 10 : at;
+                        return (
                         <button
                           key={item.id}
                           type="button"
                           className="slot-item"
                           data-testid="calendar-item"
-                          style={showNow ? { position: "relative", top: `calc(${(now.getMinutes() / 60) * 100}% + 8px)` } : undefined}
+                          style={{ marginTop }}
                           onClick={() => setSelected(item)}
                         >
                           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
@@ -332,7 +339,8 @@ export function Calendar({ profileId }: { profileId: string }) {
                             <StatusWord status={item.status} />
                           </span>
                         </button>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               );
