@@ -203,6 +203,15 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await page.getByTestId("discard").click();
   const dialog = page.getByTestId("confirm-discard");
   await expect(dialog).toBeVisible();
+  const headerInert = await page.locator("header").evaluate((element) => element.matches("[inert], [inert] *"));
+  const navInert = await page.getByRole("navigation", { name: "Sections" }).evaluate((element) => element.matches("[inert], [inert] *"));
+  const dialogInert = await dialog.evaluate((element) => element.matches("[inert], [inert] *"));
+  expect(headerInert).toBe(true);
+  expect(navInert).toBe(true);
+  expect(dialogInert).toBe(false);
+  const box = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.y >= 0 && box.y + box.height <= viewport.height + 1).toBe(true);
   await expect(page.getByTestId("confirm-remove")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "Keep" })).toBeFocused();
@@ -212,6 +221,55 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("calendar-detail")).toBeVisible();
   await expect(page.getByTestId("discard")).toBeFocused();
+  await relay.stop();
+});
+
+async function expectInView(page: Page, testId: string) {
+  const item = page.getByTestId(testId);
+  await item.scrollIntoViewIfNeeded();
+  const box = await item.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box, testId).toBeTruthy();
+  expect(viewport, "viewport").toBeTruthy();
+  if (!box || !viewport) return;
+  expect(box.x, testId).toBeGreaterThanOrEqual(-1);
+  expect(box.y, testId).toBeGreaterThanOrEqual(-1);
+  expect(box.x + box.width, testId).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box.y + box.height, testId).toBeLessThanOrEqual(viewport.height + 1);
+  const clipped = await item.evaluate((element) => element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1);
+  expect(clipped, testId).toBe(false);
+}
+
+test("narrow screens keep navigation and queue controls reachable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  for (const name of ["inbox", "compose", "calendar", "log", "sign"]) await expectInView(page, `nav-${name}`);
+  await page.getByTestId("nav-calendar").click();
+  for (const name of ["prev", "view-week", "view-day", "next", "publish-due"]) await expectInView(page, name);
+  await relay.stop();
+});
+
+test("a toast does not cover schedule", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await page.getByTestId("note-text").fill("Short note");
+  await page.getByTestId("save-draft").click();
+  await expect(page.getByTestId("toast-success")).toBeVisible();
+  await page.getByTestId("save-draft").scrollIntoViewIfNeeded();
+  const covered = await page.evaluate(() => {
+    const toast = document.querySelector("[data-testid=toast-success]")?.getBoundingClientRect();
+    const button = document.querySelector("[data-testid=save-draft]")?.getBoundingClientRect();
+    if (!toast || !button) return true;
+    return button.top < toast.bottom && button.bottom > toast.top && button.left < toast.right && button.right > toast.left;
+  });
+  expect(covered).toBe(false);
   await relay.stop();
 });
 
