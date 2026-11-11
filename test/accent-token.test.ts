@@ -126,4 +126,18 @@ describe("accent token", () => {
   test("retired green values are gone", () => {
     expect(hits(retiredGreen, true)).toEqual([]);
   });
+
+  test("a colour hex outside the theme folder is noticed", () => {
+    const colour = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/;
+    const found: string[] = [];
+    for (const path of files(join(root, "web"))) {
+      const rel = relative(root, path).split(sep).join("/");
+      if (rel.startsWith("web/src/theme/")) continue;
+      const source = readFileSync(path, "utf8");
+      source.split("\n").forEach((line, index) => {
+        if (colour.test(line)) found.push(`${rel}:${index + 1}`);
+      });
+    }
+    expect(found).toEqual([]);
+  });
 });

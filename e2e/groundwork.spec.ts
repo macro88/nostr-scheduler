@@ -1,8 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { suggestionId, unixSeconds } from "../src/domain/brand.ts";
+import { noteUnsigned } from "../src/domain/event.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
+import { WorkStore } from "../src/work/store.ts";
 
 const dataDir = "e2e/run";
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
@@ -203,7 +206,7 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await expect(page.getByTestId("sign-status")).toContainText("Queued");
   await page.getByTestId("nav-calendar").click();
   await page.getByTestId("calendar-item").filter({ hasText: "Queued for discard" }).click();
-  await expect(page.getByTestId("frozen-note")).toBeVisible();
+  await expect(page.getByTestId("frozen-note")).toHaveCount(0);
   await page.getByTestId("discard").click();
   const dialog = page.getByTestId("confirm-discard");
   await expect(dialog).toBeVisible();
@@ -225,6 +228,65 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("calendar-detail")).toBeVisible();
   await expect(page.getByTestId("discard")).toBeFocused();
+  await relay.stop();
+});
+
+test("a signed item explains that the time is frozen", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  profileFile(signer, url);
+  await page.goto("/");
+  await clear(page);
+  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  const created = (await post(page, "/api/compose", {
+    profileId: "demo",
+    draft: { type: "note", content: "Signed and still frozen", proposedFireAt: fireAt },
+  })) as { id: string };
+  const store = new WorkStore(`${dataDir}/app.sqlite`);
+  const item = store.get(suggestionId(created.id));
+  if (item.status !== "approved" || item.draft.type !== "note") throw new Error("expected an approved note");
+  const signed = await signer.signEvent(noteUnsigned({ pubkey: signer.pubkey, content: item.draft.content, createdAt: item.draft.proposedFireAt }));
+  store.transition(item.id, { type: "sign", events: [signed] }, unixSeconds(Math.floor(Date.now() / 1000)));
+  store.close();
+  await page.reload();
+  await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("calendar-item").filter({ hasText: "Signed and still frozen" }).click();
+  await expect(page.getByTestId("frozen-note")).toHaveText("This event is signed, so the time is frozen. Discard it and sign again to choose a new time.");
+  await relay.stop();
+});
+
+test("the time picker traps focus and returns it on escape", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await page.getByTestId("schedule").click();
+  await expect(page.getByTestId("time-day")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByTestId("time-apply")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("time-picker")).toHaveCount(0);
+  await expect(page.getByTestId("schedule")).toBeFocused();
+  await relay.stop();
+});
+
+test("the composer lists the current draft and keeps the shortcut off the page", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await clear(page);
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByText("Control or Command and Enter schedules.")).toHaveCount(0);
+  await page.getByTestId("note-text").fill("draft line for the queue");
+  const draft = page.getByTestId("composer-draft");
+  await expect(draft).toContainText("draft line for the queue");
+  await expect(draft).toContainText("Draft");
+  await page.getByTestId("note-text").press("Control+Enter");
+  await expect(page.getByTestId("toast-success")).toContainText("Scheduled");
+  await expect(page.getByTestId("composer-draft")).toHaveCount(0);
   await relay.stop();
 });
 
