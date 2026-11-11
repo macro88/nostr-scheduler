@@ -1,0 +1,61 @@
+/* App theme. One file of semantic values, so a theme package can replace it. */
+
+:root {
+  color-scheme: light;
+  --color-bg: #e4e9e6;
+  --color-surface: #f2f5f3;
+  --color-text: #141a18;
+  --color-muted: #3c4c46;
+  --color-accent: #0c5548;
+  --color-accent-fg: #0a4a3e;
+  --color-accent-on: #ffffff;
+  --color-selected: #d8e0dc;
+  --color-today: #eaf0ec;
+  --color-border: #c5cdc8;
+  --color-border-strong: #68716a;
+  --color-focus: #0c5548;
+  --color-scrim: rgb(20 26 24 / 40%);
+  --status-failed-fg: #7a2428;
+  --status-failed-bg: #f0d9d8;
+  --status-missed-fg: #5c4010;
+  --status-missed-bg: #ede3c8;
+  --elevation-rest: none;
+  --elevation-hover: 0 4px 12px rgb(20 26 24 / 8%);
+  --elevation-lift: 0 10px 24px rgb(20 26 24 / 14%);
+  --font-ui: "Be Vietnam Pro";
+  --font-note: "Literata";
+  --font-mono: "IBM Plex Mono";
+  --radius-control: 4px;
+  --radius-panel: 8px;
+  --radius-badge: 999px;
+  --radius-menu: 8px;
+  --radius-avatar: 999px;
+  --header-h: 56px;
+  --chop: 6px;
+  --motion-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #121816;
+  --color-surface: #1a211f;
+  --color-text: #e4ede8;
+  --color-muted: #a8b8b2;
+  --color-accent: #5b9e8a;
+  --color-accent-fg: #68a894;
+  --color-accent-on: #121816;
+  --color-selected: #242c29;
+  --color-today: #1e2623;
+  --color-border: #2a322f;
+  --color-border-strong: #7e807a;
+  --color-focus: #5b9e8a;
+  --color-scrim: rgb(0 0 0 / 62%);
+  --status-failed-fg: #e8a8a4;
+  --status-failed-bg: #3a2424;
+  --status-missed-fg: #e0c98a;
+  --status-missed-bg: #3a3320;
+  --elevation-hover: 0 4px 12px rgb(0 0 0 / 28%);
+  --elevation-lift: 0 10px 28px rgb(0 0 0 / 40%);
+}
