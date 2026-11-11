@@ -135,7 +135,7 @@ export function Sign({ profile }: { profile: Profile }) {
           </Button>
         </div>
         <p className="mt-3 text-sm text-[#5c564c]" data-testid="pair-state">
-          {info.data?.paired ? "Paired" : "Not paired"} · {info.data?.request ?? "idle"}
+          {info.data?.paired ? "Paired" : "Not paired"}
         </p>
       </div>
     </section>

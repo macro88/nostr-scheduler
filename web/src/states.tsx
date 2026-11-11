@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { plainError } from "./errors";
+import { genericChangeError, plainError } from "./errors";
 
 export function LoadingBlock({ pending, label }: { pending: boolean; label: string }) {
   if (!pending) return null;
@@ -22,7 +22,7 @@ export function EmptyState({ title, action }: { title: string; action?: ReactNod
 
 export function InlineError({ error, fallback }: { error: unknown; fallback?: string }) {
   const plain = plainError(error);
-  const message = fallback ?? plain.message;
+  const message = fallback && plain.message === genericChangeError ? fallback : plain.message;
   return (
     <div role="alert" data-testid="inline-error" className="mt-2 text-sm text-[#8a2e24]">
       <p>{message}</p>

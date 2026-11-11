@@ -70,22 +70,15 @@ export function Composer({ profile }: { profile: Profile }) {
   return (
     <section data-testid="composer" className="max-w-2xl">
       <h2 className="text-xl font-semibold">{title}</h2>
-      <p className="mt-1 text-sm text-[#5c564c]">Control and Enter schedules.</p>
-      <div className="mt-4 flex gap-2" role="tablist" aria-label="Post kind">
+      <p className="mt-1 text-sm text-[#5c564c]">Control or Command and Enter schedules.</p>
+      <div className="mt-4 flex gap-2" role="group" aria-label="Post kind">
         {(["note", "thread", "reply"] as const).map((value) => (
           <Button
             key={value}
-            role="tab"
-            aria-selected={kind === value}
+            aria-pressed={kind === value}
             data-testid={`kind-${value}`}
             variant={kind === value ? "default" : "outline"}
             onClick={() => setKind(value)}
-            onKeyDown={(event) => {
-              const order: Kind[] = ["note", "thread", "reply"];
-              const current = order.indexOf(kind);
-              if (event.key === "ArrowRight") setKind(order[(current + 1) % order.length] ?? "note");
-              if (event.key === "ArrowLeft") setKind(order[(current + order.length - 1) % order.length] ?? "note");
-            }}
           >
             {value[0]?.toUpperCase()}
             {value.slice(1)}
@@ -174,7 +167,7 @@ export function Composer({ profile }: { profile: Profile }) {
         <Button data-testid="save-draft" onClick={() => save.mutate()} disabled={save.isPending}>
           Schedule
         </Button>
-        {formError ? <InlineError error={formError} /> : null}
+        {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
       </div>
     </section>
   );
