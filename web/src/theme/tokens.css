@@ -1,7 +1,7 @@
 @import "tailwindcss";
-@import "../../../node_modules/@macro88/tokens/src/theme.css";
-@import "../../../node_modules/@macro88/motion/src/tokens.css";
-@import "../../../node_modules/@macro88/theme-nostr/src/theme.css";
+@import "@macro88/tokens/theme.css";
+@import "@macro88/motion/tokens.css";
+@import "@macro88/theme-nostr/theme.css";
 
 /* Layout values the theme packages do not ship. */
 :root {
