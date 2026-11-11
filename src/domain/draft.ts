@@ -22,6 +22,12 @@ function segmentOf(value: unknown): ThreadSegment {
   return { content: contentOf(value.content), proposedFireAt: timeOf(value.proposedFireAt, "proposed_fire_at") };
 }
 
+function parentOf(value: unknown): { at: UnixSeconds; content: string } | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new InputError("parent", "expected an object");
+  return { at: timeOf(value.at, "parent_at"), content: contentOf(value.content) };
+}
+
 function targetOf(value: unknown): ReplyTarget {
   if (!isRecord(value)) throw new InputError("target", "expected an object");
   if (typeof value.eventId !== "string" || typeof value.rootId !== "string" || typeof value.pubkey !== "string") {
@@ -55,11 +61,13 @@ export function parseDraft(value: unknown): Draft {
     return { type: "thread", segments: [first, second, ...rest] };
   }
   if (value.type === "reply") {
+    const parent = parentOf(value.parent);
     return {
       type: "reply",
       content: contentOf(value.content),
       proposedFireAt: timeOf(value.proposedFireAt, "proposed_fire_at"),
       target: targetOf(value.target),
+      ...(parent ? { parent } : {}),
     };
   }
   throw new InputError("type", "expected note, thread, or reply");

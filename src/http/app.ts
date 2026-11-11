@@ -213,14 +213,17 @@ export function createApp(options: AppOptions) {
   app.post("/api/sign/nip07/next", async (c) => {
     const body = signNextSchema.parse(await c.req.json());
     const owner = profile(body.profileId);
+    const only = body.itemIds ? new Set(body.itemIds) : null;
     let cursor = cursors.get(owner.id);
     if (!cursor || cursor.profileId !== owner.id) cursor = blankCursor(owner.id);
+    if (cursor.current && only && !only.has(cursor.current.itemId)) cursor.current = null;
     if (cursor.current) {
       cursors.set(owner.id, cursor);
       return c.json({ done: false, itemId: cursor.current.itemId, unsigned: cursor.current.unsigned });
     }
     for (const item of store.list(owner.id)) {
       if (item.status !== "approved") continue;
+      if (only && !only.has(item.id)) continue;
       const signedSoFar = cursor.pending.get(item.id) ?? [];
       const unsigned = nextUnsigned({ item, profile: owner, signedSoFar, now: now() });
       if (!unsigned) continue;
