@@ -34,13 +34,15 @@ export function Log() {
               {(item.results ?? []).map((result, index) => (
                 <div key={`${result.relay}-${index}`} data-testid="relay-result" className="log-result">
                   <p>{result.accepted ? "Accepted on the local relay." : "The relay refused this note. It was not sent again."}</p>
-                  <details>
-                    <summary>Technical detail</summary>
-                    <p className="mono">
-                      {result.relay}
-                      {result.message ? ` ${result.message}` : ""}
-                    </p>
-                  </details>
+                  {result.accepted ? null : (
+                    <details>
+                      <summary>Technical detail</summary>
+                      <p className="mono">
+                        {result.relay}
+                        {result.message ? ` ${result.message}` : ""}
+                      </p>
+                    </details>
+                  )}
                 </div>
               ))}
             </div>
