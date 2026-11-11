@@ -15,6 +15,14 @@ describe("schedule dates", () => {
     expect(formatQueueWhen(at(13, 11, 0), frozen)).toBe("Fri 13 Nov, 11:00");
   });
 
+  test("tomorrow crosses the year boundary", () => {
+    const nye = new Date(2026, 11, 31, 15, 5, 0);
+    const jan1 = Math.floor(new Date(2027, 0, 1, 11, 0, 0).getTime() / 1000);
+    const jan2 = Math.floor(new Date(2027, 0, 2, 11, 0, 0).getTime() / 1000);
+    expect(formatQueueWhen(jan1, nye)).toBe("Tomorrow, 11:00");
+    expect(formatQueueWhen(jan2, nye)).toBe("Sat 2 Jan, 11:00");
+  });
+
   test("midnight keeps today and tomorrow on the calendar day", () => {
     const late = new Date(2026, 10, 11, 23, 50, 0);
     expect(formatQueueWhen(at(11, 23, 59), late)).toBe("Today, 23:59");

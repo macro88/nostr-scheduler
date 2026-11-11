@@ -1477,7 +1477,7 @@ nav { flex-wrap: wrap; }
     font-size: 12px;
     line-height: 16px;
     font-variation-settings: "opsz" 12, "wght" 400;
-    color: var(--color-text-muted, var(--color-muted));
+    color: var(--color-muted);
   }
   .wevt .meta { display: contents; }
   .wevt time { grid-column: 1; grid-row: 1; min-width: 0; }

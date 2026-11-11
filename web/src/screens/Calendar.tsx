@@ -351,7 +351,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {selected ? (
         <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
           <p>
-            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatWhen(selected.fireAt[0]) : ""}
+            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
           </p>
           <p className="note-md">{selected.preview}</p>
           {canDiscard ? (
