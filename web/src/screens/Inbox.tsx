@@ -160,7 +160,7 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
           <h1 id="section-title" tabIndex={-1}>
             Inbox
           </h1>
-          <p className="page-kicker">{suggestions.length} waiting</p>
+          {suggestions.length > 0 ? <p className="page-kicker">{suggestions.length} waiting</p> : null}
         </div>
         <div className="kbd-hints" role="note" aria-label="Keyboard shortcuts">
           <span className="kbd-group">
