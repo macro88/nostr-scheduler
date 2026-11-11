@@ -97,7 +97,7 @@ function summarize(event: { id: string; pubkey: string; content: string; created
   return `${event.id} by ${event.pubkey} at ${event.created_at}\n${event.content}`;
 }
 
-async function threadContext(ctx: McpContext, profile: Profile, target: ReplyTarget): Promise<string> {
+export async function readThreadContext(ctx: McpContext, profile: Profile, target: ReplyTarget): Promise<string> {
   const load = async (id: string) => {
     const cached = ctx.store.recall(id);
     if (cached) return cached;
@@ -146,7 +146,7 @@ export async function callTool(ctx: McpContext, name: string, args: Record<strin
       },
     });
     if (draft.type !== "reply") throw new Error("target is incomplete");
-    return { context: await threadContext(ctx, profile, draft.target) };
+    return { context: await readThreadContext(ctx, profile, draft.target) };
   }
   if (name === "suggest_post") {
     const profile = profileById(ctx, String(args.profileId ?? ""));

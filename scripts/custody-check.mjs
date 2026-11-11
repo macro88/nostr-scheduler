@@ -48,7 +48,7 @@ function walk(dir, out) {
 
 export function scanTree(start = root) {
   const files = [];
-  for (const dir of ["src", "test"]) {
+  for (const dir of ["src", "test", "web", "e2e"]) {
     const full = join(start, dir);
     try {
       walk(full, files);
