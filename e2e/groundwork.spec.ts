@@ -309,6 +309,46 @@ async function expectInView(page: Page, testId: string) {
   expect(clipped, testId).toBe(false);
 }
 
+test("a phone week card shows an excerpt only when it is at least 44px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await clear(page);
+  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  await post(page, "/api/compose", {
+    profileId: "demo",
+    draft: { type: "note", content: "ship the relay table before the call", proposedFireAt: fireAt },
+  });
+  await page.reload();
+  await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("view-week").click();
+  const card = page.getByTestId("calendar-item").filter({ hasText: "ship the relay table" });
+  await expect(card).toBeVisible();
+  await card.evaluate((node) => {
+    node.style.height = "60px";
+    node.style.maxHeight = "60px";
+  });
+  const excerpt = card.locator(".wevt-excerpt");
+  await expect(excerpt).toBeVisible();
+  const clearOfStatus = await card.evaluate((node) => {
+    const line = node.querySelector(".wevt-excerpt")?.getBoundingClientRect();
+    const status = node.querySelector(".status, .status-flag")?.getBoundingClientRect();
+    if (!line || !status) return false;
+    const overlaps = line.left < status.right - 1 && line.right > status.left + 1 && line.top < status.bottom - 1 && line.bottom > status.top + 1;
+    return !overlaps;
+  });
+  expect(clearOfStatus).toBe(true);
+  await card.evaluate((node) => {
+    node.style.height = "32px";
+    node.style.maxHeight = "32px";
+    node.style.minHeight = "0px";
+  });
+  await expect(excerpt).toHaveCount(0);
+  await relay.stop();
+});
+
 test("narrow screens keep navigation and queue controls reachable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   const relay = new LocalRelay();
