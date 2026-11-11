@@ -115,13 +115,13 @@ export function App() {
         </label>
         </div>
       </header>
-      <nav className="mt-6 flex gap-2" aria-label="Sections">
+      <nav className="mt-6 flex w-full flex-wrap gap-2" aria-label="Sections">
         {views.map((name, index) => (
           <button
             key={name}
             data-testid={`nav-${name}`}
             aria-current={view === name ? "page" : undefined}
-            className={`rounded-full px-4 py-2 text-sm ${view === name ? "bg-[#1c1b17] text-white" : "text-[#5c564c] hover:bg-[#ebe6dc]"}`}
+            className={`shrink-0 rounded-full px-4 py-2 text-sm ${view === name ? "bg-[#1c1b17] text-white" : "text-[#5c564c] hover:bg-[#ebe6dc]"}`}
             onClick={() => setView(name)}
           >
             {sections[name]}

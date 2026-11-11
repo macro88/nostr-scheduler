@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, type Item } from "../api";
 import { Button, Input, StatusBadge } from "../components/ui";
 import { plainError } from "../errors";
@@ -110,6 +111,8 @@ export function Calendar({ profileId }: { profileId: string }) {
       dialog
         ? [...dialog.querySelectorAll<HTMLElement>("button, [href], input, select, textarea")].filter((node) => !node.hasAttribute("disabled"))
         : [];
+    const root = document.getElementById("root");
+    root?.setAttribute("inert", "");
     focusable()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
@@ -128,15 +131,14 @@ export function Calendar({ profileId }: { profileId: string }) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      root?.removeAttribute("inert");
       discardRef.current?.focus();
     };
   }, [confirming]);
 
   return (
     <section data-testid="calendar" aria-label="Queue">
-      <div inert={confirming ? true : undefined}>
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex gap-2">
+      <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <Button variant="outline" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
             Previous
           </Button>
@@ -159,7 +161,6 @@ export function Calendar({ profileId }: { profileId: string }) {
           <Button data-testid="publish-due" onClick={() => publish.mutate()} disabled={publish.isPending}>
             Publish due
           </Button>
-        </div>
       </div>
       {publish.error ? <InlineError error={publish.error} /> : null}
       {items.isPending && !items.data && !surface.loading ? <p className="sr-only">Loading the queue</p> : null}
@@ -168,7 +169,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {surface.ready && !items.isError && onView.length === 0 ? (
         <EmptyState title={mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."} />
       ) : null}
-      {surface.ready ? <div className={`mt-6 grid gap-3 ${mode === "week" ? "grid-cols-7" : "grid-cols-1"}`} data-testid={mode === "week" ? "week-grid" : "day-grid"}>
+      {surface.ready ? <div className={`mt-6 grid gap-3 ${mode === "week" ? "grid-cols-1 md:grid-cols-7" : "grid-cols-1"}`} data-testid={mode === "week" ? "week-grid" : "day-grid"}>
         {days.map((day) => {
           const hours = mode === "day" ? Array.from({ length: 24 }, (_, hour) => hour) : [0];
           return (
@@ -247,27 +248,31 @@ export function Calendar({ profileId }: { profileId: string }) {
           {reschedule.error || discard.error ? <InlineError error={reschedule.error ?? discard.error} /> : null}
         </div>
       ) : null}
-      </div>
-      {confirming && canDiscard ? (
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-title"
-          data-testid="confirm-discard"
-          className="mt-4 rounded-3xl border border-[#e4dfd4] bg-white p-5"
-        >
-          <p id="confirm-title">Discard this item from the queue?</p>
-          <div className="mt-3 flex gap-2">
-            <Button data-testid="confirm-remove" onClick={() => discard.mutate()}>
-              Discard
-            </Button>
-            <Button variant="outline" onClick={() => setConfirming(false)}>
-              Keep
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      {confirming && canDiscard
+        ? createPortal(
+            <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#1c1b17]/40 p-4">
+              <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="confirm-title"
+                data-testid="confirm-discard"
+                className="w-full max-w-md rounded-3xl border border-[#8a8478] bg-white p-5"
+              >
+                <p id="confirm-title">Discard this item from the queue?</p>
+                <div className="mt-3 flex gap-2">
+                  <Button data-testid="confirm-remove" onClick={() => discard.mutate()}>
+                    Discard
+                  </Button>
+                  <Button variant="outline" onClick={() => setConfirming(false)}>
+                    Keep
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }
