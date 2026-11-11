@@ -349,8 +349,8 @@ test("the page does not load a forbidden typeface", async ({ page }) => {
     const nodes = [document.body, document.querySelector("h1"), document.querySelector(".wordmark"), document.querySelector(".editor")].filter(Boolean);
     return nodes.map((node) => getComputedStyle(node as Element).fontFamily).join(" | ");
   });
-  expect(families).toMatch(/ui-sans-serif|system-ui/);
-  expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto|Be Vietnam Pro|Literata/i);
+  expect(families).toContain("Be Vietnam Pro");
+  expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto/i);
   await relay.stop();
 });
 
@@ -363,10 +363,7 @@ test("axe finds no serious or critical issues", async ({ page }) => {
     await page.getByTestId(`nav-${name}`).click();
     for (const theme of ["light", "dark"] as const) {
       await page.evaluate((value) => {
-        const root = document.documentElement;
-        root.dataset.theme = "nostr";
-        if (value === "dark") root.dataset.scheme = "dark";
-        else delete root.dataset.scheme;
+        document.documentElement.dataset.theme = value;
       }, theme);
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");

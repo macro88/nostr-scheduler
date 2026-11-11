@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ThemeProvider } from "./theme/mode";
 import "./theme/tokens.css";
+import "./theme/fonts.css";
 import "./theme/layout.css";
 
 const queryClient = new QueryClient({

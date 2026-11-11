@@ -24,9 +24,6 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
-    "@macro88/motion": "github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/motion",
-    "@macro88/theme-nostr": "github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/themes/nostr",
-    "@macro88/tokens": "github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/tokens",
     "@napi-rs/keyring": "^2.1.2",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.0.1",
