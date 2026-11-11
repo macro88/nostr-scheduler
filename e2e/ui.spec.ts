@@ -100,8 +100,11 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   await page.getByTestId("edit-text").fill("Alpha revised");
   await page.getByTestId("save-edit").click();
   await page.getByTestId("approve").click();
-  await page.getByTestId("reject-reason").fill("off brief");
-  await page.getByTestId("reject").click();
+  const remaining = page.getByTestId("suggestion");
+  await expect(remaining).toHaveCount(1);
+  await remaining.getByTestId("reject-open").click();
+  await remaining.getByTestId("reject-reason").fill("off brief");
+  await remaining.getByTestId("reject").click();
   await expect(page.getByText("Nothing is waiting.")).toBeVisible();
 
   await page.getByTestId("nav-compose").click();
@@ -114,6 +117,8 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   await parts.nth(1).fill("Reply line");
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/composer-thread.png", fullPage: true });
   await page.getByTestId("save-draft").click();
+  await expect(page.getByTestId("thread-part").first()).toBeFocused();
+  await page.getByTestId("nav-calendar").click();
 
   await expect(page.getByTestId("week-grid")).toBeVisible();
   await expect(page.getByTestId("calendar-item").filter({ hasText: marker })).toBeVisible();
@@ -130,7 +135,7 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   await expect(page.getByTestId("calendar-item").filter({ hasText: marker }).getByTestId("status-sent")).toBeVisible();
   await page.getByTestId("nav-log").click();
   const logged = page.getByTestId("log-item").filter({ hasText: marker });
-  await expect(logged.getByTestId("relay-result").first()).toContainText("accepted");
+  await expect(logged.getByTestId("relay-result").first()).toContainText("Accepted");
   await expect(logged.getByTestId("relay-result").first()).toContainText("127.0.0.1");
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/sent-log.png", fullPage: true });
   await relay.stop();
