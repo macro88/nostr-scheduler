@@ -82,7 +82,11 @@ node src/cli/main.ts disconnect
 
 `pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
 
-The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file. Compose schedules a note, a thread, or a reply. The calendar shows the week or the day. An unsigned time can move. A signed time is frozen, and the page says to discard it and sign again.
+The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file after a short undo. Compose schedules a note, a thread, or a reply, then clears the editor. The queue shows the week or the day. An unsigned time can move. A signed time is frozen, and removing a signed or queued item asks you to confirm.
+
+Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. Keys 1 to 5 switch sections. In the inbox, J and K move, A approves, E edits, and R rejects. Control and Enter schedules from the editor. Escape closes a panel.
+
+If a change fails, the page says what to do next. The technical detail stays behind a disclosure. Signing says how far through a batch you are only when more than one note is being signed.
 
 Signing uses the browser signer on this page, or a paired bunker. Threads are signed root first. The bunker session stays in the OS keychain. The sign screen shows a QR code and a bunker link, plus disconnect. Test and demo runs keep that session in memory so they do not need a keychain.
 
