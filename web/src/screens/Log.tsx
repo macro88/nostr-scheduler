@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type Item } from "../api";
-import { formatWhen } from "../format";
+import { formatQueueWhen } from "../format";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
 
@@ -28,7 +28,7 @@ export function Log() {
       <div className="log-list">
         {(log.data ?? []).map((item) => (
           <article key={item.id} data-testid="log-item" className="log-row">
-            <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+            <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
             <div className="log-body">
               <p className="note-md">{item.preview}</p>
               {(item.results ?? []).map((result, index) => (
