@@ -113,12 +113,12 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
           <p>{toast.detail}</p>
         </details>
       ) : null}
-      <div className="mt-2 flex gap-2">
+      <div className="toast-actions">
         {toast.onUndo ? (
           <button
             type="button"
             data-testid="undo"
-            className="underline"
+            className="toast-action"
             onClick={() => {
               toast.onUndo?.();
               onDismiss();
@@ -128,7 +128,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
           </button>
         ) : null}
         {toast.kind === "error" ? (
-          <button type="button" className="underline" onClick={onDismiss}>
+          <button type="button" className="toast-action" onClick={onDismiss}>
             Dismiss
           </button>
         ) : null}

@@ -181,7 +181,7 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
       <LoadingBlock pending={surface.loading} label="Loading suggestions" />
       {items.isError ? <InlineError error={items.error} fallback="The suggestions could not be loaded. Try again." /> : null}
       {surface.ready && !items.isError ? (
-        <div className="desk">
+        <div className={`desk${suggestions.length === 0 ? " is-empty" : ""}`}>
           {suggestions.length === 0 ? (
             <div className="desk-empty inbox-list" data-testid="empty">
               <p className="empty-title">Nothing is waiting.</p>

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { api, type Item } from "../api";
 import { plainError } from "../errors";
@@ -10,8 +10,10 @@ import { InlineError, LoadingBlock } from "../states";
 import { useToasts } from "../toasts";
 import { WhenField } from "../WhenField";
 
-const openHour = 7;
-const closeHour = 23;
+const weekOpen = 7;
+const weekClose = 23;
+const dayOpen = 8;
+const dayClose = 21;
 
 export function Calendar({ profileId }: { profileId: string }) {
   const queryClient = useQueryClient();
@@ -44,6 +46,8 @@ export function Calendar({ profileId }: { profileId: string }) {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  const openHour = mode === "day" ? dayOpen : weekOpen;
+  const closeHour = mode === "day" ? dayClose : weekClose;
   const span = closeHour - openHour;
   const nowFraction = (now.getHours() + now.getMinutes() / 60 - openHour) / span;
 
@@ -100,8 +104,25 @@ export function Calendar({ profileId }: { profileId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
-    const today = boardRef.current?.querySelector<HTMLElement>("[data-today='true']");
-    today?.scrollIntoView({ inline: "center", block: "nearest" });
+    const align = () => {
+      if (mode !== "week") return;
+      const board = boardRef.current;
+      const today = board?.querySelector<HTMLElement>("[data-today='true']");
+      if (!board || !today) return;
+      const narrow = window.matchMedia("(max-width: 800px)").matches;
+      if (!narrow) {
+        today.scrollIntoView({ inline: "center", block: "nearest" });
+        return;
+      }
+      const gutter = board.querySelector(".hour-gutter");
+      const lane = board.querySelector(".lane.today");
+      if (!gutter || !lane) return;
+      const delta = lane.getBoundingClientRect().left - gutter.getBoundingClientRect().right;
+      board.scrollLeft += delta;
+    };
+    align();
+    window.addEventListener("resize", align);
+    return () => window.removeEventListener("resize", align);
   }, [mode, cursor]);
   useEffect(() => {
     if (!confirming) return;
@@ -213,7 +234,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       ) : null}
       {surface.ready && mode === "week" ? (
         <div className="week-scroll" ref={boardRef} data-testid="week-grid">
-          <div className="week-board">
+          <div className="week-board" style={{ "--hours": String(span) } as CSSProperties}>
             <div className="gutter-head" />
             <div className="day-heads">
               {days.map((day) => (
@@ -297,10 +318,19 @@ export function Calendar({ profileId }: { profileId: string }) {
                         return sameLocalDay(date, cursor) && date.getHours() === hour;
                       })
                       .map((item) => (
-                        <button key={item.id} type="button" className="slot-item" data-testid="calendar-item" onClick={() => setSelected(item)}>
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="slot-item"
+                          data-testid="calendar-item"
+                          style={showNow ? { position: "relative", top: `calc(${(now.getMinutes() / 60) * 100}% + 8px)` } : undefined}
+                          onClick={() => setSelected(item)}
+                        >
                           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                           <p className="note-md">{item.preview}</p>
-                          <StatusWord status={item.status} />
+                          <span className="slot-status">
+                            <StatusWord status={item.status} />
+                          </span>
                         </button>
                       ))}
                   </div>
@@ -318,7 +348,9 @@ export function Calendar({ profileId }: { profileId: string }) {
           <p className="note-md">{selected.preview}</p>
           {canDiscard ? (
             <div>
-              <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
+              {selected.status === "signed" ? (
+                <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
+              ) : null}
               <button ref={discardRef} type="button" className="btn btn-outline" data-testid="discard" onClick={() => setConfirming(true)}>
                 Discard
               </button>

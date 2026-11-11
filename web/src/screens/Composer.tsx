@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
 import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
 import { statusWord } from "../labels";
@@ -22,6 +22,13 @@ export function Composer({ profile }: { profile: Profile }) {
   const [context, setContext] = useState("");
   const [reply, setReply] = useState("");
   const [formError, setFormError] = useState<unknown>(null);
+  const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 801px)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 801px)");
+    const onChange = () => setWide(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
   const queue = useQuery({
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
@@ -48,6 +55,12 @@ export function Composer({ profile }: { profile: Profile }) {
   }, [note, reply, parts, kind]);
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
+  const draftText = text.trim();
+  const queueRows = draftText
+    ? [...upcoming, { id: "composer-draft", fireAt: [when], preview: draftText, status: "suggestion" }].sort(
+        (left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0),
+      )
+    : upcoming;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -179,7 +192,6 @@ export function Composer({ profile }: { profile: Profile }) {
           </div>
         ) : null}
         <div className="composer-foot">
-          <p className="caption">Control or Command and Enter schedules.</p>
           <div className="composer-meta">
             <WhenField value={when} onChange={setWhen} invalid={Boolean(formError)} />
             <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
@@ -191,7 +203,14 @@ export function Composer({ profile }: { profile: Profile }) {
             <button type="button" className="btn btn-ghost" onClick={() => keep.mutate()} disabled={keep.isPending}>
               Save without scheduling
             </button>
-            <button type="button" className="btn btn-primary" data-testid="save-draft" onClick={() => save.mutate()} disabled={save.isPending}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="save-draft"
+              title={wide ? "Control or Command and Enter schedules." : undefined}
+              onClick={() => save.mutate()}
+              disabled={save.isPending}
+            >
               Schedule
             </button>
           </div>
@@ -203,9 +222,9 @@ export function Composer({ profile }: { profile: Profile }) {
           <p className="page-kicker">{upcoming.length} this week</p>
         </div>
         <div className="queue-list">
-          {upcoming.map((item) => (
-            <article key={item.id} className="q-row">
-              <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
+          {queueRows.map((item) => (
+            <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
+              <time>{item.fireAt[0] ? (item.id === "composer-draft" ? formatWhen(item.fireAt[0]) : formatQueueWhen(item.fireAt[0])) : ""}</time>
               <p className="q-preview note-md">{item.preview}</p>
               <StatusWord status={item.status} />
             </article>

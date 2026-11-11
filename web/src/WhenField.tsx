@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatWhen } from "./format";
 
@@ -50,17 +50,42 @@ export function WhenField({
     setBox({ top, left });
   }, [open, parts]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!open) return;
+    const dialog = popRef.current;
+    const root = document.getElementById("root");
+    root?.setAttribute("inert", "");
+    const focusable = () =>
+      dialog
+        ? [...dialog.querySelectorAll<HTMLElement>("button, [href], input, select, textarea")].filter((node) => !node.hasAttribute("disabled"))
+        : [];
+    focusable()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      buttonRef.current?.focus();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const nodes = focusable();
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      root?.removeAttribute("inert");
+      buttonRef.current?.focus();
+    };
   }, [open]);
 
   const apply = () => {
@@ -119,6 +144,7 @@ export function WhenField({
               ref={popRef}
               className="time-pop"
               role="dialog"
+              aria-modal="true"
               aria-label="Choose a time"
               data-testid="time-picker"
               style={{ top: box.top, left: box.left }}
@@ -128,7 +154,7 @@ export function WhenField({
               {field("year", "Year", "time-year")}
               {field("hour", "Hour", "time-hour")}
               {field("minute", "Minute", "time-minute")}
-              <button type="button" className="btn btn-primary btn-sm time-apply" data-testid="time-apply" onClick={apply}>
+              <button type="button" className="btn btn-primary time-apply" data-testid="time-apply" onClick={apply}>
                 Use this time
               </button>
             </div>,
