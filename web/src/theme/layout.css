@@ -11,7 +11,7 @@ html, body {
   overflow: auto;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
@@ -108,21 +108,21 @@ main {
 
 /* ---------- Type ---------- */
 h1 {
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 h2 {
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 24px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 .note-text, .detail-note, .editor, .preview-note, .q-preview, .inbox-item .preview {
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-optical-sizing: auto;
 }
 .caption, .hint, .kbd-hints, .when, .log-result, .bunker-status, .page-kicker {
@@ -257,14 +257,14 @@ h2 {
   letter-spacing: 0.01em;
 }
 .status-failed {
-  color: var(--status-failed-fg);
-  background: var(--status-failed-bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-failed-fg) 28%, transparent);
+  color: var(--color-status-failed-fg);
+  background: var(--color-status-failed-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-status-failed-fg) 28%, transparent);
 }
 .status-missed {
-  color: var(--status-missed-fg);
-  background: var(--status-missed-bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--status-missed-fg) 28%, transparent);
+  color: var(--color-status-missed-fg);
+  background: var(--color-status-missed-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-status-missed-fg) 28%, transparent);
 }
 
 .kbd-hints {
@@ -283,7 +283,7 @@ kbd {
   padding: 0 5px;
   border-radius: var(--radius-control);
   box-shadow: inset 0 0 0 1px var(--color-border-strong);
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   font-size: 12px;
   line-height: 20px;
   font-weight: 600;
@@ -305,9 +305,9 @@ kbd {
 }
 .field::placeholder { color: var(--color-muted); opacity: 1; }
 .field.mono, .mono { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0; }
-.field.is-error { box-shadow: inset 0 0 0 1px var(--status-failed-fg); }
+.field.is-error { box-shadow: inset 0 0 0 1px var(--color-status-failed-fg); }
 .error {
-  color: var(--status-failed-fg);
+  color: var(--color-status-failed-fg);
   font-size: 14px;
   line-height: 20px;
   font-weight: 500;
@@ -346,7 +346,7 @@ button.check { padding: 0; }
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--color-text);
 }
-.date-ctrl.is-error { box-shadow: inset 0 0 0 1px var(--status-failed-fg); }
+.date-ctrl.is-error { box-shadow: inset 0 0 0 1px var(--color-status-failed-fg); }
 .date-ctrl.focus-demo {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
@@ -438,7 +438,7 @@ button.check { padding: 0; }
 .thread q {
   display: block;
   quotes: "“" "”";
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 26px;
   color: var(--color-text);
@@ -593,7 +593,7 @@ textarea.editor:focus-visible {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.q-row.current .q-preview { font-weight: 600; font-family: var(--font-note); }
+.q-row.current .q-preview { font-weight: 600; font-family: var(--font-body); }
 
 /* ---------- Week queue ---------- */
 .next-up {
@@ -626,7 +626,7 @@ textarea.editor:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-note);
+  font-family: var(--font-body);
 }
 .counts {
   display: flex;
@@ -764,7 +764,7 @@ textarea.editor:focus-visible {
 .wevt .status, .wevt .status-flag { font-size: 11px; line-height: 14px; height: auto; padding: 0 5px; }
 .wevt p {
   margin-top: 2px;
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 12px;
   line-height: 16px;
   overflow: hidden;
@@ -853,7 +853,7 @@ textarea.editor:focus-visible {
 }
 .slot-item p {
   margin: 0;
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 24px;
 }
@@ -894,7 +894,7 @@ textarea.editor:focus-visible {
   padding-top: 0;
 }
 .work-row p {
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 24px;
 }
@@ -962,21 +962,21 @@ textarea.editor:focus-visible {
   min-width: 0;
 }
 .log-row p {
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 24px;
 }
 .log-result {
   margin-top: 6px;
   color: var(--color-muted);
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
 }
 .log-result details, .log-result summary {
   margin-top: 4px;
-  font-family: var(--font-ui);
+  font-family: var(--font-display);
   font-size: 13px;
   line-height: 18px;
   color: var(--color-muted);
@@ -993,7 +993,7 @@ textarea.editor:focus-visible {
 /* ---------- v4: Literata optical sizes, lining figures ---------- */
 .note-text, .detail-note, .editor, .preview-note, .q-preview, .inbox-item .preview,
 .thread q, .work-row p, .log-row p, .slot-item p, .wevt p, .next-up-copy p, .sign-note {
-  font-family: var(--font-note);
+  font-family: var(--font-body);
   font-optical-sizing: auto;
   font-variant-numeric: lining-nums;
   font-feature-settings: "kern" 1, "liga" 1, "lnum" 1, "onum" 0;
@@ -1339,9 +1339,9 @@ nav { flex-wrap: wrap; }
 .profile-menu button[aria-checked="true"] { background: var(--color-selected); }
 .menu-label { font-size: 12px; line-height: 16px; color: var(--color-muted); padding: 8px 10px 2px; }
 .profile-menu .shortcut-toggle { display: flex; align-items: center; gap: 8px; color: var(--color-text); }
-.note-lg { font-family: var(--font-note); font-size: 22px; line-height: 36px; font-weight: 400; letter-spacing: -0.005em; font-optical-sizing: none; font-variation-settings: "opsz" 22, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
-.note-md { font-family: var(--font-note); font-size: 16px; line-height: 24px; font-weight: 400; font-optical-sizing: none; font-variation-settings: "opsz" 16, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
-.note-sm { font-family: var(--font-note); font-size: 12px; line-height: 16px; font-optical-sizing: none; font-variation-settings: "opsz" 12, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
+.note-lg { font-family: var(--font-body); font-size: 22px; line-height: 36px; font-weight: 400; letter-spacing: -0.005em; font-optical-sizing: none; font-variation-settings: "opsz" 22, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
+.note-md { font-family: var(--font-body); font-size: 16px; line-height: 24px; font-weight: 400; font-optical-sizing: none; font-variation-settings: "opsz" 16, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
+.note-sm { font-family: var(--font-body); font-size: 12px; line-height: 16px; font-optical-sizing: none; font-variation-settings: "opsz" 12, "wght" 400; font-feature-settings: "lnum" 1, "kern" 1; }
 .mono { font-family: var(--font-mono); }
 .theme-toggle, .shortcut-toggle { color: var(--color-muted); font-size: 14px; line-height: 20px; }
 .header-tools { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
@@ -1367,7 +1367,7 @@ a:focus-visible {
 .inbox-item.leaving {
   transform: translateX(12px);
   opacity: 0;
-  transition: transform 160ms var(--motion-out), opacity 160ms var(--motion-out);
+  transition: transform 160ms var(--motion-ease-exit), opacity 160ms var(--motion-ease-exit);
 }
 .motion-check {
   position: fixed;
@@ -1388,7 +1388,7 @@ a:focus-visible {
   height: 2px;
   background: var(--color-accent);
   transform-origin: left center;
-  transition: transform var(--motion-base) var(--motion-out);
+  transition: transform var(--motion-duration-base) var(--motion-ease-exit);
 }
 .week-now,
 .now-line,

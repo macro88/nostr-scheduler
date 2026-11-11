@@ -11,6 +11,15 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.6
         version: 2.1.6(hono@4.13.17)
+      '@macro88/motion':
+        specifier: github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/motion
+        version: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/motion
+      '@macro88/theme-nostr':
+        specifier: github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/themes/nostr
+        version: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/themes/nostr
+      '@macro88/tokens':
+        specifier: github:macro88/design-system#40ca37313eda6d1fdb48b50323b7811b442b2bfb&path:packages/tokens
+        version: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/tokens
       '@napi-rs/keyring':
         specifier: ^2.1.2
         version: 2.1.2
@@ -208,6 +217,18 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@macro88/motion@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/motion':
+    resolution: {gitHosted: true, integrity: sha512-5fTIYnCCGkzDhloiDjXCcG1sUMygIPGlqHApH3AUlNvdSNmOfECHl4LSZ1qzTeZv3dvvIi5ttQuGb1MmKN3I4g==, tarball: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb}
+    version: 0.0.0
+
+  '@macro88/theme-nostr@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/themes/nostr':
+    resolution: {gitHosted: true, integrity: sha512-5fTIYnCCGkzDhloiDjXCcG1sUMygIPGlqHApH3AUlNvdSNmOfECHl4LSZ1qzTeZv3dvvIi5ttQuGb1MmKN3I4g==, tarball: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb}
+    version: 0.0.0
+
+  '@macro88/tokens@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/tokens':
+    resolution: {gitHosted: true, integrity: sha512-5fTIYnCCGkzDhloiDjXCcG1sUMygIPGlqHApH3AUlNvdSNmOfECHl4LSZ1qzTeZv3dvvIi5ttQuGb1MmKN3I4g==, tarball: https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb}
+    version: 0.0.0
 
   '@napi-rs/keyring-darwin-arm64@2.1.2':
     resolution: {integrity: sha512-vsInUWUzWS6/WzR/TFNwmdtmwKWjnnR8TOpvZ/pjjxDAkJB/waz37PWzp2b8AFcw1aCcq2aQ7k2vvbLQy8pTrw==}
@@ -1770,6 +1791,12 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@macro88/motion@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/motion': {}
+
+  '@macro88/theme-nostr@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/themes/nostr': {}
+
+  '@macro88/tokens@https://codeload.github.com/macro88/design-system/tar.gz/40ca37313eda6d1fdb48b50323b7811b442b2bfb#path:packages/tokens': {}
 
   '@napi-rs/keyring-darwin-arm64@2.1.2':
     optional: true

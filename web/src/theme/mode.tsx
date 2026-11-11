@@ -19,7 +19,10 @@ function systemDark(): boolean {
 
 function apply(choice: Choice) {
   const dark = choice === "dark" || (choice === "system" && systemDark());
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const root = document.documentElement;
+  root.dataset.theme = "nostr";
+  if (dark) root.dataset.scheme = "dark";
+  else delete root.dataset.scheme;
 }
 
 const ThemeContext = createContext({

@@ -1,64 +1,14 @@
-/* App theme. One file of semantic values, so a theme package can replace it. */
+@import "tailwindcss";
+@import "@macro88/tokens/theme.css";
+@import "@macro88/motion/tokens.css";
+@import "@macro88/theme-nostr/theme.css";
 
+/* Layout values the theme packages do not ship. */
 :root {
-  color-scheme: light;
-  --color-bg: #e6e7e6;
-  --color-surface: #f3f4f3;
-  --color-text: #151616;
-  --color-muted: #404846;
-  --color-accent: #662482;
-  --color-accent-fg: #521c69;
-  --color-accent-on: #ffffff;
-  --color-focus: var(--color-accent);
-  --color-selected: #dbdedc;
-  --color-today: #eceeec;
-  --color-border: #c8cbc9;
-  --color-border-strong: #6a6e6b;
-  --color-skeleton: #dbdedc;
-  --color-scrim: rgb(21 22 22 / 40%);
-  --status-failed-fg: #7a2428;
-  --status-failed-bg: #f0d9d8;
-  --status-missed-fg: #5c4010;
-  --status-missed-bg: #ede3c8;
-  --elevation-rest: none;
-  --elevation-hover: 0 4px 12px rgb(21 22 22 / 8%);
-  --elevation-lift: 0 10px 24px rgb(21 22 22 / 14%);
-  --font-ui: "Be Vietnam Pro";
-  --font-note: "Literata";
-  --font-mono: "IBM Plex Mono";
-  --radius-control: 4px;
-  --radius-field: 4px;
-  --radius-panel: 8px;
-  --radius-badge: 999px;
-  --radius-overlay: 8px;
-  --radius-full: 999px;
   --header-h: 56px;
   --chop: 6px;
-  --motion-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --motion-fast: 120ms;
-  --motion-base: 200ms;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  --color-bg: #141515;
-  --color-surface: #1c1e1d;
-  --color-text: #e8ebe9;
-  --color-muted: #a8b0ad;
-  --color-accent: #b373ce;
-  --color-accent-fg: #be82d4;
-  --color-accent-on: #141515;
-  --color-focus: var(--color-accent);
-  --color-selected: #262928;
-  --color-today: #202221;
-  --color-border: #2c2f2e;
-  --color-border-strong: #7e807e;
-  --color-skeleton: #262928;
-  --color-scrim: rgb(0 0 0 / 62%);
-  --status-failed-fg: #e8a8a4;
-  --status-failed-bg: #3a2424;
-  --status-missed-fg: #e0c98a;
-  --status-missed-bg: #3a3320;
-  --elevation-hover: 0 4px 12px rgb(0 0 0 / 28%);
-  --elevation-lift: 0 10px 28px rgb(0 0 0 / 40%);
+  --color-today: color-mix(in srgb, var(--color-border) 50%, var(--color-surface));
+  --color-skeleton: var(--color-border);
+  --color-selected: var(--color-accent-subtle);
+  --font-mono: ui-monospace, monospace;
 }
