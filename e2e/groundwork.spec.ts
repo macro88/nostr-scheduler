@@ -205,6 +205,9 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await page.getByTestId("sign-browser").click();
   await expect(page.getByTestId("sign-status")).toContainText("Queued");
   await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("view-day").click();
+  const noteAlign = await page.locator(".slot-item p").first().evaluate((node) => getComputedStyle(node).textAlign);
+  expect(["start", "left"]).toContain(noteAlign);
   await page.getByTestId("calendar-item").filter({ hasText: "Queued for discard" }).click();
   await expect(page.getByTestId("frozen-note")).toHaveCount(0);
   await page.getByTestId("discard").click();
