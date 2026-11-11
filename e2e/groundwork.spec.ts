@@ -90,7 +90,7 @@ test("keyboard approve, reject with undo, and schedule", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("toast-undo")).toBeVisible();
   await page.getByTestId("undo").click();
-  await expect(page.getByText("Undo note")).toBeVisible();
+  await expect(page.getByTestId("suggestion").filter({ hasText: "Undo note" })).toBeVisible();
 
   await page.getByTestId("nav-compose").click();
   await page.getByTestId("note-text").fill("Scheduled from the keyboard");
@@ -159,7 +159,7 @@ test("single-key shortcuts turn off and stay out of text fields", async ({ page 
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
   await expect(page.getByTestId("toast-success")).toHaveCount(0);
-  await expect(page.getByText("Shortcut note")).toBeVisible();
+  await expect(page.getByTestId("suggestion").filter({ hasText: "Shortcut note" })).toBeVisible();
   await page.reload();
   await expect(page.getByTestId("shortcuts")).not.toBeChecked();
   await page.getByTestId("shortcuts").check();
@@ -273,6 +273,44 @@ test("a toast does not cover schedule", async ({ page }) => {
   await relay.stop();
 });
 
+test("the time control uses a 24-hour British date and refuses the past", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByTestId("schedule")).toHaveText(/\w{3} \d{1,2} \w{3}, \d{2}:\d{2}/);
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-hour").press("ArrowUp");
+  await page.getByTestId("time-minute").fill("15");
+  await page.getByTestId("time-apply").click();
+  await expect(page.getByTestId("schedule")).toHaveText(/\w{3} \d{1,2} \w{3}, \d{2}:15/);
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-year").fill(String(yesterday.getFullYear()));
+  await page.getByTestId("time-month").fill(String(yesterday.getMonth() + 1));
+  await page.getByTestId("time-day").fill(String(yesterday.getDate()));
+  await page.getByTestId("time-apply").click();
+  await page.getByTestId("note-text").fill("too late");
+  await page.getByTestId("save-draft").click();
+  await expect(page.getByTestId("inline-error")).toContainText("This time is in the past.");
+  await relay.stop();
+});
+
+test("the page does not load a forbidden typeface", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  const families = await page.evaluate(() => {
+    const nodes = [document.body, document.querySelector("h1"), document.querySelector(".wordmark"), document.querySelector(".editor")].filter(Boolean);
+    return nodes.map((node) => getComputedStyle(node as Element).fontFamily).join(" | ");
+  });
+  expect(families).toContain("Be Vietnam Pro");
+  expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto/i);
+  await relay.stop();
+});
+
 test("axe finds no serious or critical issues", async ({ page }) => {
   const relay = new LocalRelay();
   const url = await relay.start();
@@ -280,9 +318,14 @@ test("axe finds no serious or critical issues", async ({ page }) => {
   await page.goto("/");
   for (const name of ["inbox", "compose", "calendar", "log", "sign"]) {
     await page.getByTestId(`nav-${name}`).click();
-    const results = await new AxeBuilder({ page }).analyze();
-    const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
-    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      const results = await new AxeBuilder({ page }).analyze();
+      const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
+      expect(blocking, `${name} ${theme}\n${JSON.stringify(blocking, null, 2)}`).toEqual([]);
+    }
   }
   await relay.stop();
 });

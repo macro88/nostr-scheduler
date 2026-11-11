@@ -94,24 +94,27 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
     draft: { type: "note", content: "Beta note", proposedFireAt: fireAt },
   });
   await page.reload();
-  await expect(page.getByText("Alpha note")).toBeVisible();
+  await expect(page.getByTestId("suggestion").filter({ hasText: "Alpha note" })).toBeVisible();
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/inbox.png", fullPage: true });
   await page.getByTestId("edit").click();
   await page.getByTestId("edit-text").fill("Alpha revised");
   await page.getByTestId("save-edit").click();
   await page.getByTestId("approve").click();
-  const remaining = page.getByTestId("suggestion");
-  await expect(remaining).toHaveCount(1);
-  await remaining.getByTestId("reject-open").click();
-  await remaining.getByTestId("reject-reason").fill("off brief");
-  await remaining.getByTestId("reject").click();
+  await expect(page.getByTestId("suggestion")).toHaveCount(1);
+  await page.getByTestId("reject-open").click();
+  await page.getByTestId("reject-reason").fill("off brief");
+  await page.getByTestId("reject").click();
   await expect(page.getByText("Nothing is waiting.")).toBeVisible();
 
   await page.getByTestId("nav-compose").click();
   await page.getByTestId("kind-thread").click();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  const local = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`;
-  await page.getByTestId("schedule").fill(local);
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-year").fill(String(when.getFullYear()));
+  await page.getByTestId("time-month").fill(String(when.getMonth() + 1));
+  await page.getByTestId("time-day").fill(String(when.getDate()));
+  await page.getByTestId("time-hour").fill(String(when.getHours()));
+  await page.getByTestId("time-minute").fill(String(when.getMinutes()));
+  await page.getByTestId("time-apply").click();
   const parts = page.getByTestId("thread-part");
   await parts.nth(0).fill(marker);
   await parts.nth(1).fill("Reply line");
