@@ -94,26 +94,34 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
     draft: { type: "note", content: "Beta note", proposedFireAt: fireAt },
   });
   await page.reload();
-  await expect(page.getByText("Alpha note")).toBeVisible();
+  await expect(page.getByTestId("suggestion").filter({ hasText: "Alpha note" })).toBeVisible();
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/inbox.png", fullPage: true });
   await page.getByTestId("edit").click();
   await page.getByTestId("edit-text").fill("Alpha revised");
   await page.getByTestId("save-edit").click();
   await page.getByTestId("approve").click();
+  await expect(page.getByTestId("suggestion")).toHaveCount(1);
+  await page.getByTestId("reject-open").click();
   await page.getByTestId("reject-reason").fill("off brief");
   await page.getByTestId("reject").click();
   await expect(page.getByText("Nothing is waiting.")).toBeVisible();
 
   await page.getByTestId("nav-compose").click();
   await page.getByTestId("kind-thread").click();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  const local = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`;
-  await page.getByTestId("schedule").fill(local);
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-year").fill(String(when.getFullYear()));
+  await page.getByTestId("time-month").fill(String(when.getMonth() + 1));
+  await page.getByTestId("time-day").fill(String(when.getDate()));
+  await page.getByTestId("time-hour").fill(String(when.getHours()));
+  await page.getByTestId("time-minute").fill(String(when.getMinutes()));
+  await page.getByTestId("time-apply").click();
   const parts = page.getByTestId("thread-part");
   await parts.nth(0).fill(marker);
   await parts.nth(1).fill("Reply line");
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/composer-thread.png", fullPage: true });
   await page.getByTestId("save-draft").click();
+  await expect(page.getByTestId("thread-part").first()).toBeFocused();
+  await page.getByTestId("nav-calendar").click();
 
   await expect(page.getByTestId("week-grid")).toBeVisible();
   await expect(page.getByTestId("calendar-item").filter({ hasText: marker })).toBeVisible();
@@ -130,8 +138,8 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   await expect(page.getByTestId("calendar-item").filter({ hasText: marker }).getByTestId("status-sent")).toBeVisible();
   await page.getByTestId("nav-log").click();
   const logged = page.getByTestId("log-item").filter({ hasText: marker });
-  await expect(logged.getByTestId("relay-result").first()).toContainText("accepted");
-  await expect(logged.getByTestId("relay-result").first()).toContainText("127.0.0.1");
+  await expect(logged.getByTestId("relay-result").first()).toContainText("Accepted on the local relay.");
+  await expect(page.getByTestId("log").locator("summary")).toHaveCount(0);
   if (process.env.SAVE_UI_SHOTS === "1") await page.screenshot({ path: "/opt/cursor/artifacts/ui-screenshots/sent-log.png", fullPage: true });
   await relay.stop();
 });

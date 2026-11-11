@@ -1,30 +1,46 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type Item } from "../api";
-import { StatusBadge } from "../components/ui";
+import { formatWhen } from "../format";
+import { usePendingSurface } from "../pending";
+import { InlineError, LoadingBlock } from "../states";
 
 export function Log() {
   const log = useQuery({ queryKey: ["log"], queryFn: () => api<Item[]>("/api/log") });
+  const surface = usePendingSurface(log.isPending && !log.data);
   return (
-    <section data-testid="log">
-      <h2 className="text-xl font-semibold">Sent and failed</h2>
-      <ul className="mt-6 space-y-3">
+    <section data-testid="log" aria-label="Log">
+      <div className="page-head compact">
+        <div className="title-row">
+          <h1 id="section-title" tabIndex={-1}>
+            Log
+          </h1>
+          <p className="page-kicker">Sent and failed</p>
+        </div>
+      </div>
+      {log.isPending && !log.data && !surface.loading ? <p className="sr">Loading the log</p> : null}
+      <LoadingBlock pending={surface.loading} label="Loading the log" />
+      {log.isError ? <InlineError error={log.error} fallback="The log could not be loaded. Try again." /> : null}
+      {surface.ready && !log.isError && (log.data ?? []).length === 0 ? (
+        <div data-testid="empty">
+          <p>Nothing has been sent yet.</p>
+        </div>
+      ) : null}
+      <div className="log-list">
         {(log.data ?? []).map((item) => (
-          <li key={item.id} data-testid="log-item" className="rounded-3xl bg-white p-5">
-            <div className="flex items-center gap-2">
-              <StatusBadge status={item.status} />
-              <p className="text-sm text-[#6d675d]">{item.preview}</p>
-            </div>
-            <ul className="mt-3 space-y-1 text-sm">
+          <article key={item.id} data-testid="log-item" className="log-row">
+            <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+            <div className="log-body">
+              <p className="note-md">{item.preview}</p>
               {(item.results ?? []).map((result, index) => (
-                <li key={`${result.relay}-${index}`} data-testid="relay-result">
-                  {result.accepted ? "accepted" : "failed"} {result.relay} {result.message}
-                </li>
+                <div key={`${result.relay}-${index}`} data-testid="relay-result" className="log-result">
+                  <p>{result.accepted ? "Accepted on the local relay." : "The relay refused this note. It was not sent again."}</p>
+                </div>
               ))}
-            </ul>
-          </li>
+            </div>
+            {item.status === "failed" ? <span className="status-flag status-failed">Failed</span> : <span className="status">Sent</span>}
+          </article>
         ))}
-      </ul>
-      {(log.data ?? []).length === 0 ? <p className="mt-8 text-[#6d675d]">Nothing has been sent yet.</p> : null}
+      </div>
     </section>
   );
 }

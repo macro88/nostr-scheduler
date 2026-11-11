@@ -1,22 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { api, type Item } from "../api";
-import { Button, Input, StatusBadge } from "../components/ui";
+import { plainError } from "../errors";
+import { formatClock, formatQueueWhen, formatWhen, sameLocalDay, startOfWeek } from "../format";
+import { statusWord } from "../labels";
+import { usePendingSurface } from "../pending";
+import { InlineError, LoadingBlock } from "../states";
+import { useToasts } from "../toasts";
+import { WhenField } from "../WhenField";
 
-function startOfWeek(date: Date): Date {
-  const next = new Date(date);
-  const day = (next.getDay() + 6) % 7;
-  next.setDate(next.getDate() - day);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function sameDay(left: Date, right: Date): boolean {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
-}
+const weekOpen = 7;
+const weekClose = 23;
+const dayOpen = 8;
+const dayClose = 21;
 
 export function Calendar({ profileId }: { profileId: string }) {
   const queryClient = useQueryClient();
+  const toasts = useToasts();
   const items = useQuery({
     queryKey: ["items", profileId],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profileId}`),
@@ -24,14 +25,34 @@ export function Calendar({ profileId }: { profileId: string }) {
   const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
   const [mode, setMode] = useState<"week" | "day">("week");
   const [selected, setSelected] = useState<Item | null>(null);
-  const [when, setWhen] = useState("");
-  const visible = (items.data ?? []).filter((item) =>
-    ["approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
+  const [when, setWhen] = useState(() => Math.floor(Date.now() / 1000) + 3600);
+  const [confirming, setConfirming] = useState(false);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const confirmingRef = useRef(false);
+  confirmingRef.current = confirming;
+  const surface = usePendingSurface(items.isPending && !items.data);
+  const visible = (items.data ?? []).filter(
+    (item) => !hidden.includes(item.id) && ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
   );
   const days = mode === "week" ? Array.from({ length: 7 }, (_, index) => new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + index)) : [cursor];
+  const canDiscard = selected?.status === "queued" || selected?.status === "signed";
+  const canMove = selected?.status === "approved";
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const openHour = mode === "day" ? dayOpen : weekOpen;
+  const closeHour = mode === "day" ? dayClose : weekClose;
+  const span = closeHour - openHour;
+  const nowFraction = (now.getHours() + now.getMinutes() / 60 - openHour) / span;
 
   const reschedule = useMutation({
-    mutationFn: () => api(`/api/items/${selected?.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: Math.floor(new Date(when).getTime() / 1000) }) }),
+    mutationFn: () => api(`/api/items/${selected?.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: when }) }),
     onSuccess: () => {
       setSelected(null);
       void queryClient.invalidateQueries({ queryKey: ["items", profileId] });
@@ -41,101 +62,355 @@ export function Calendar({ profileId }: { profileId: string }) {
     mutationFn: () => api(`/api/items/${selected?.id}/discard`, { method: "POST", body: JSON.stringify({ reason: "reschedule" }) }),
     onSuccess: () => {
       setSelected(null);
+      setConfirming(false);
+      toasts.push({ kind: "success", message: "Removed from the queue." });
       void queryClient.invalidateQueries({ queryKey: ["items", profileId] });
     },
+    onError: (error) => toasts.push({ kind: "error", ...plainError(error) }),
   });
+  const undoDiscard = (item: Item) => {
+    setHidden((current) => [...current, item.id]);
+    setSelected(null);
+    toasts.push({
+      kind: "undo",
+      message: "Draft removed.",
+      onUndo: () => setHidden((current) => current.filter((id) => id !== item.id)),
+      onExpire: () => {
+        void api(`/api/items/${item.id}/discard`, { method: "POST", body: JSON.stringify({ reason: "removed" }) })
+          .then(() => queryClient.invalidateQueries({ queryKey: ["items", profileId] }))
+          .catch((error) => {
+            setHidden((current) => current.filter((id) => id !== item.id));
+            toasts.push({ kind: "error", ...plainError(error) });
+          });
+      },
+    });
+  };
   const publish = useMutation({
     mutationFn: () => api("/api/publish", { method: "POST", body: "{}" }),
     onSuccess: () => void queryClient.invalidateQueries(),
   });
-  const frozen = selected ? ["signed", "queued", "sent", "failed", "missed"].includes(selected.status) : false;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (confirmingRef.current) {
+        event.preventDefault();
+        setConfirming(false);
+        return;
+      }
+      setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    const align = () => {
+      if (mode !== "week") return;
+      const board = boardRef.current;
+      const today = board?.querySelector<HTMLElement>("[data-today='true']");
+      if (!board || !today) return;
+      const narrow = window.matchMedia("(max-width: 800px)").matches;
+      if (!narrow) {
+        today.scrollIntoView({ inline: "center", block: "nearest" });
+        return;
+      }
+      const gutter = board.querySelector(".hour-gutter");
+      const lane = board.querySelector(".lane.today");
+      if (!gutter || !lane) return;
+      const delta = lane.getBoundingClientRect().left - gutter.getBoundingClientRect().right;
+      board.scrollLeft += delta;
+    };
+    align();
+    window.addEventListener("resize", align);
+    return () => window.removeEventListener("resize", align);
+  }, [mode, cursor]);
+  useEffect(() => {
+    if (!confirming) return;
+    const dialog = dialogRef.current;
+    const focusable = () =>
+      dialog ? [...dialog.querySelectorAll<HTMLElement>("button, [href], input, select, textarea")].filter((node) => !node.hasAttribute("disabled")) : [];
+    const root = document.getElementById("root");
+    root?.setAttribute("inert", "");
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const nodes = focusable();
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      root?.removeAttribute("inert");
+      discardRef.current?.focus();
+    };
+  }, [confirming]);
+
+  const range = `${days[0]?.toLocaleDateString("en-GB", { day: "numeric" })}–${days.at(-1)?.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+  const inView = visible.filter((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && days.some((day) => sameLocalDay(new Date(at * 1000), day));
+  });
+  const upcoming = [...inView].sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
+  const nowUnix = Math.floor(now.getTime() / 1000);
+  const currentItem = [...upcoming].reverse().find((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && at <= nowUnix && sameLocalDay(new Date(at * 1000), now);
+  });
+  const nextItem = currentItem ?? upcoming.find((item) => (item.fireAt[0] ?? 0) >= nowUnix) ?? upcoming[0];
+  const todayCount = inView.filter((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && sameLocalDay(new Date(at * 1000), now);
+  }).length;
+  const toSign = (items.data ?? []).filter((item) => item.status === "approved").length;
+  const showNow = nowFraction > 0 && nowFraction < 1 && days.some((day) => sameLocalDay(day, now));
 
   return (
-    <section data-testid="calendar">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">{mode === "week" ? "Week" : "Day"}</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
+    <section data-testid="calendar" aria-label="Queue">
+      <div className="page-head compact">
+        <div className="title-row">
+          <h1 id="section-title" tabIndex={-1}>
+            Queue
+          </h1>
+          <p className="page-kicker">{mode === "week" ? range : cursor.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}</p>
+        </div>
+        <div className="toolbar">
+          <button type="button" className="btn btn-outline btn-sm" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
             Previous
-          </Button>
-          <Button variant="outline" data-testid="view-week" onClick={() => { setMode("week"); setCursor(startOfWeek(cursor)); }}>
-            Week
-          </Button>
-          <Button variant="outline" data-testid="view-day" onClick={() => setMode("day")}>
-            Day
-          </Button>
-          <Button variant="outline" data-testid="next" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + (mode === "week" ? 7 : 1)))}>
+          </button>
+          <div className="seg" role="group" aria-label="View">
+            <button type="button" aria-pressed={mode === "week"} data-testid="view-week" onClick={() => { setMode("week"); setCursor(startOfWeek(cursor)); }}>
+              Week
+            </button>
+            <button type="button" aria-pressed={mode === "day"} data-testid="view-day" onClick={() => { setMode("day"); setCursor(new Date()); }}>
+              Day
+            </button>
+          </div>
+          <button type="button" className="btn btn-outline btn-sm" data-testid="next" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + (mode === "week" ? 7 : 1)))}>
             Next
-          </Button>
-          <Button data-testid="publish-due" onClick={() => publish.mutate()} disabled={publish.isPending}>
+          </button>
+          <span className="spacer" />
+          <button type="button" className="btn btn-primary btn-sm" data-testid="publish-due" onClick={() => publish.mutate()} disabled={publish.isPending}>
             Publish due
-          </Button>
+          </button>
         </div>
       </div>
-      <div className={`mt-6 grid gap-3 ${mode === "week" ? "grid-cols-7" : "grid-cols-1"}`} data-testid={mode === "week" ? "week-grid" : "day-grid"}>
-        {days.map((day) => {
-          const hours = mode === "day" ? Array.from({ length: 24 }, (_, hour) => hour) : [0];
-          return (
-            <div key={day.toISOString()} className="min-h-48 rounded-3xl bg-white p-3">
-              <p className="text-xs uppercase tracking-wide text-[#7a746a]">
-                {day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-              </p>
-              {hours.map((hour) => (
-                <div key={hour} className={mode === "day" ? "mt-3 border-t border-[#f0ebe3] pt-2" : "mt-3 space-y-2"}>
-                  {mode === "day" ? <p className="text-xs text-[#8a847a]">{String(hour).padStart(2, "0")}:00</p> : null}
-                  {visible
-                    .filter((item) => {
-                      const stamp = item.fireAt[0];
-                      if (!stamp) return false;
-                      const date = new Date(stamp * 1000);
-                      if (!sameDay(date, day)) return false;
-                      return mode === "week" || date.getHours() === hour;
-                    })
-                    .map((item) => (
-                      <button
-                        key={item.id}
-                        data-testid="calendar-item"
-                        className="block w-full rounded-2xl bg-[#f7f4ee] p-2 text-left"
-                        onClick={() => {
-                          setSelected(item);
-                          setWhen("");
-                        }}
-                      >
-                        <StatusBadge status={item.status} />
-                        <p className="mt-2 line-clamp-3 text-sm">{item.preview}</p>
-                      </button>
-                    ))}
+      {mode === "week" && nextItem?.fireAt[0] ? (
+        <div className="next-up">
+          <div className="next-up-copy">
+            <time>{formatQueueWhen(nextItem.fireAt[0], now)}</time>
+            <p>{nextItem.preview}</p>
+            <StatusWord status={nextItem.status} />
+          </div>
+          <div className="counts" aria-label="This week">
+            <div>
+              <strong>{inView.length}</strong> this week
+            </div>
+            <div>
+              <strong>{todayCount}</strong> today
+            </div>
+            <div>
+              <strong>{toSign}</strong> to sign
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {publish.error ? <InlineError error={publish.error} /> : null}
+      {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading the queue</p> : null}
+      <LoadingBlock pending={surface.loading} label="Loading the queue" />
+      {items.isError ? <InlineError error={items.error} fallback="The queue could not be loaded. Try again." /> : null}
+      {surface.ready && !items.isError && visible.length === 0 ? (
+        <div data-testid="empty">
+          <p>{mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."}</p>
+        </div>
+      ) : null}
+      {surface.ready && mode === "week" ? (
+        <div className="week-scroll" ref={boardRef} data-testid="week-grid">
+          <div className="week-board" style={{ "--hours": String(span) } as CSSProperties}>
+            <div className="gutter-head" />
+            <div className="day-heads">
+              {days.map((day) => (
+                <div key={day.toISOString()} className={`day-head${sameLocalDay(day, now) ? " today" : ""}`} data-today={sameLocalDay(day, now) ? "true" : undefined}>
+                  <p className="day-name">
+                    {sameLocalDay(day, now) ? `${day.toLocaleDateString("en-GB", { weekday: "short" })}, today` : day.toLocaleDateString("en-GB", { weekday: "short" })}
+                  </p>
+                  <p className="day-num">{day.getDate()}</p>
                 </div>
               ))}
             </div>
-          );
-        })}
-      </div>
-      {selected ? (
-        <div data-testid="calendar-detail" className="mt-4 rounded-3xl border border-[#e4dfd4] bg-white p-5">
-          <div className="flex items-center gap-2">
-            <StatusBadge status={selected.status} />
-            <p className="text-sm text-[#6d675d]">{selected.fireAt[0] ? new Date(selected.fireAt[0] * 1000).toLocaleString() : ""}</p>
+            <div className="hour-gutter" aria-hidden="true">
+              {Array.from({ length: span + 1 }, (_, index) => {
+                const hour = openHour + index;
+                const atEnd = index === span;
+                const collide = !atEnd && showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) <= 20;
+                if (collide) return null;
+                return (
+                  <span key={hour} className={atEnd ? "is-end" : undefined} style={{ top: `${(index / span) * 100}%` }}>
+                    {String(hour).padStart(2, "0")}:00
+                  </span>
+                );
+              })}
+              {showNow ? (
+                <span className="gutter-now" style={{ top: `${nowFraction * 100}%` }}>
+                  {formatClock(now)}
+                </span>
+              ) : null}
+            </div>
+            <div className="week-lanes">
+              {nowFraction > 0 && nowFraction < 1 ? (
+                <div className="week-now" style={{ top: `${nowFraction * 100}%` }} aria-label={`Now, ${formatWhen(now)}`}>
+                  <span className="sr">Now, {formatWhen(now)}</span>
+                </div>
+              ) : null}
+              {days.map((day) => (
+                <div key={day.toISOString()} className={`lane${sameLocalDay(day, now) ? " today" : ""}`}>
+                  {visible
+                    .filter((item) => item.fireAt[0] && sameLocalDay(new Date(item.fireAt[0] * 1000), day))
+                    .map((item) => {
+                      const date = new Date((item.fireAt[0] ?? 0) * 1000);
+                      const fraction = (date.getHours() + date.getMinutes() / 60 - openHour) / span;
+                      return (
+                        <button key={item.id} type="button" className="wevt" data-testid="calendar-item" style={{ top: `${Math.min(Math.max(fraction, 0), 0.92) * 100}%` }} onClick={() => setSelected(item)}>
+                          <div className="meta">
+                            <time>{formatClock(item.fireAt[0] ?? 0)}</time>
+                            <StatusWord status={item.status} />
+                          </div>
+                          <p className="note-sm">{item.preview}</p>
+                        </button>
+                      );
+                    })}
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="mt-3 whitespace-pre-wrap">{selected.preview}</p>
-          {frozen ? (
-            <div className="mt-4">
-              <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
-              <Button className="mt-3" variant="outline" data-testid="discard" onClick={() => discard.mutate()}>
-                Discard
-              </Button>
-            </div>
-          ) : (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Input data-testid="reschedule" type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} />
-              <Button data-testid="save-time" onClick={() => reschedule.mutate()} disabled={!when}>
-                Move time
-              </Button>
-            </div>
-          )}
-          {reschedule.error || discard.error ? <p className="mt-2 text-sm text-[#8a2e24]">{(reschedule.error ?? discard.error)?.message}</p> : null}
         </div>
       ) : null}
+      {surface.ready && mode === "day" ? (
+        <div className="timetable" data-testid="day-grid" ref={boardRef}>
+          <div className="hours">
+            {Array.from({ length: span }, (_, index) => {
+              const hour = openHour + index;
+              const minutesNow = now.getHours() * 60 + now.getMinutes();
+              const showNow = sameLocalDay(cursor, now) && now.getHours() === hour;
+              const nearLabel = sameLocalDay(cursor, now) && Math.abs(hour * 60 - minutesNow) <= 20;
+              return (
+                <div key={hour} className="hour" data-today={nearLabel ? "true" : undefined}>
+                  <p className={`hour-label${nearLabel ? " is-now" : ""}`}>{`${String(hour).padStart(2, "0")}:00`}</p>
+                  <div className="hour-lane">
+                    {showNow ? (
+                      <div className="now-line" style={{ top: (now.getMinutes() / 60) * 48 }} aria-label={`Now, ${formatWhen(now)}`}>
+                        <span>
+                          {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
+                        </span>
+                      </div>
+                    ) : null}
+                    {visible
+                      .filter((item) => {
+                        if (!item.fireAt[0]) return false;
+                        const date = new Date(item.fireAt[0] * 1000);
+                        return sameLocalDay(date, cursor) && date.getHours() === hour;
+                      })
+                      .map((item) => {
+                        const date = new Date((item.fireAt[0] ?? 0) * 1000);
+                        const track = 48;
+                        const at = (date.getMinutes() / 60) * track;
+                        const line = showNow ? (now.getMinutes() / 60) * track : -1;
+                        const marginTop = line >= 0 && at <= line ? line + 10 : at;
+                        return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="slot-item"
+                          data-testid="calendar-item"
+                          style={{ marginTop }}
+                          onClick={() => setSelected(item)}
+                        >
+                          <time>{formatClock(item.fireAt[0] ?? 0)}</time>
+                          <p className="note-md">{item.preview}</p>
+                          <span className="slot-status">
+                            <StatusWord status={item.status} />
+                          </span>
+                        </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      {selected ? (
+        <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
+          <p>
+            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatWhen(selected.fireAt[0]) : ""}
+          </p>
+          <p className="note-md">{selected.preview}</p>
+          {canDiscard ? (
+            <div>
+              {selected.status === "signed" ? (
+                <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
+              ) : null}
+              <button ref={discardRef} type="button" className="btn btn-outline" data-testid="discard" onClick={() => setConfirming(true)}>
+                Discard
+              </button>
+            </div>
+          ) : null}
+          {canMove ? (
+            <div className="actions">
+              <WhenField value={when} onChange={setWhen} testId="reschedule" />
+              <button type="button" className="btn btn-outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
+                Move time
+              </button>
+              <button type="button" className="btn btn-ghost" data-testid="remove-draft" onClick={() => undoDiscard(selected)}>
+                Remove
+              </button>
+            </div>
+          ) : null}
+          {reschedule.error || discard.error ? <InlineError error={reschedule.error ?? discard.error} /> : null}
+        </div>
+      ) : null}
+      {confirming && canDiscard
+        ? createPortal(
+            <div className="sheet-backdrop">
+              <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-title" data-testid="confirm-discard" className="sheet">
+                <p id="confirm-title">Discard this item from the queue?</p>
+                <div className="actions">
+                  <button type="button" className="btn btn-primary" data-testid="confirm-remove" onClick={() => discard.mutate()}>
+                    Discard
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={() => setConfirming(false)}>
+                    Keep
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
+  );
+}
+
+function StatusWord({ status }: { status: string }) {
+  if (status === "failed" || status === "missed") {
+    return (
+      <span className={`status-flag status-${status}`} data-testid={`status-${status}`}>
+        {statusWord(status)}
+      </span>
+    );
+  }
+  return (
+    <span className="status" data-testid={`status-${status}`}>
+      {statusWord(status)}
+    </span>
   );
 }
