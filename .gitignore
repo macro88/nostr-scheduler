@@ -1,6 +1,10 @@
 node_modules/
 dist/
+web/dist/
 data/
+e2e/run/
+test-results/
+playwright-report/
 artifacts/
 *.sqlite
 *.sqlite-journal

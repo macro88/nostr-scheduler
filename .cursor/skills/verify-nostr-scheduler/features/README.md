@@ -42,3 +42,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Criteria validation](./criteria.md) covers a valid brief and a named field error.
 - [Review commands](./review.md) covers status, approve, reject, and edit against an isolated data directory.
 - [Relay harness](./harness.md) covers one signed note published to the local relay and read back.
+- [Local UI](./ui.md) covers the inbox, composer, calendar, signing, and sent log in the browser.

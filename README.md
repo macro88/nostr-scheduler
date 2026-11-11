@@ -78,6 +78,14 @@ node src/cli/main.ts disconnect
 
 `sign` signs every approved item, root first for a thread, then queues the signed events. `publish` sends due events and will not send early. `publish --watch` repeats that check once a second. `mcp` speaks newline-delimited JSON-RPC on standard input.
 
+## Local UI
+
+`pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
+
+The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file. Compose schedules a note, a thread, or a reply. The calendar shows the week or the day. An unsigned time can move. A signed time is frozen, and the page says to discard it and sign again.
+
+Signing uses the browser signer on this page, or a paired bunker. Threads are signed root first. The bunker session stays in the OS keychain. The sign screen shows a QR code and a bunker link, plus disconnect. Test and demo runs keep that session in memory so they do not need a keychain.
+
 ## Demo with a mock signer and a local relay
 
 This path uses a throwaway key and an in-process relay. It does not touch a real identity and it does not connect to a public relay.
