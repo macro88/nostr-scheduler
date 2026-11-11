@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { pushOnto } from "./toast-stack";
 
 export type ToastInput = {
   kind: "success" | "error" | "undo";
@@ -22,16 +23,19 @@ export function useToasts(): ToastApi {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const stack = useRef<Toast[]>([]);
   const nextId = useRef(1);
 
   const dismiss = useCallback((id: number) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+    stack.current = stack.current.filter((toast) => toast.id !== id);
+    setToasts(stack.current);
   }, []);
 
   const push = useCallback((toast: ToastInput) => {
     const id = nextId.current;
     nextId.current += 1;
-    setToasts((current) => [...current, { ...toast, id }].slice(-3));
+    stack.current = pushOnto(stack.current, { ...toast, id });
+    setToasts(stack.current);
   }, []);
 
   return (
