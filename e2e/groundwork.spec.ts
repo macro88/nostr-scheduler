@@ -298,6 +298,17 @@ test("the time control uses a 24-hour British date and refuses the past", async 
   await page.getByTestId("note-text").fill("too late");
   await page.getByTestId("save-draft").click();
   await expect(page.getByTestId("inline-error")).toContainText("This time is in the past.");
+  await expect(page.getByTestId("inline-error")).not.toContainText("Technical detail");
+  await expect(page.getByTestId("save-draft")).toBeEnabled();
+  const ahead = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-year").fill(String(ahead.getFullYear()));
+  await page.getByTestId("time-month").fill(String(ahead.getMonth() + 1));
+  await page.getByTestId("time-day").fill(String(ahead.getDate()));
+  await page.getByTestId("time-apply").click();
+  await page.getByTestId("save-draft").click();
+  await expect(page.getByTestId("inline-error")).toContainText("further ahead than you can sign");
+  await expect(page.getByTestId("inline-error")).not.toContainText("Technical detail");
   await relay.stop();
 });
 

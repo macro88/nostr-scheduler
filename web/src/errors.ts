@@ -9,10 +9,12 @@ export function plainError(error: unknown): PlainError {
   const detail = error instanceof Error ? error.message : "The request failed.";
   const text = detail.toLowerCase();
   if (text.includes("past") || text.includes("already passed")) {
-    return { message: "This time is in the past. Choose a time from now on.", detail };
+    const message = "This time is in the past. Choose a time from now on.";
+    return { message, detail: message };
   }
   if (text.includes("horizon") || text.includes("further ahead") || text.includes("7 day")) {
-    return { message: "This time is further ahead than you can sign. Choose a time within the next seven days.", detail };
+    const message = "This time is further ahead than you can sign. Choose a time within the next seven days.";
+    return { message, detail: message };
   }
   if (text.includes("frozen") || text.includes("discard it")) {
     return { message: "This event is signed, so the time is frozen. Discard it and sign again to choose a new time.", detail };
