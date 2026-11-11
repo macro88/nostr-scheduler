@@ -13,6 +13,7 @@ import { publishDue, virtualClock } from "../publisher/publish.ts";
 import { signApproved } from "../signers/batch.ts";
 import { fetchFromRelay, publishToRelay } from "../test-relay/client.ts";
 import { LocalRelay } from "../test-relay/relay.ts";
+import { seedGallery } from "./gallery.ts";
 import { WorkStore } from "../work/store.ts";
 
 const START = 1_700_000_000;
@@ -72,19 +73,19 @@ export async function runLocalDemo(dataDir: string): Promise<DemoReport> {
       profileId: "demo",
       suggesterId: "demo-suggester",
       rationale: "demo note",
-      draft: { type: "note", content: "A local note, signed before it is sent.", proposedFireAt: dueAt },
+      draft: { type: "note", content: "ws://127.0.0.1 is the only relay on this note. dont retry if it bounces.", proposedFireAt: dueAt },
     });
     const missed = await callTool(ctx, "suggest_post", {
       profileId: "demo",
       suggesterId: "demo-suggester",
       rationale: "late note",
-      draft: { type: "note", content: "This one is outside the catch-up window.", proposedFireAt: missedAt },
+      draft: { type: "note", content: "gm", proposedFireAt: missedAt },
     });
     const future = await callTool(ctx, "suggest_post", {
       profileId: "demo",
       suggesterId: "demo-suggester",
       rationale: "later note",
-      draft: { type: "note", content: "This one stays queued.", proposedFireAt: futureAt },
+      draft: { type: "note", content: "teh queue keeps this one. the relay line stays on 127.0.0.1 until next week.", proposedFireAt: futureAt },
     });
     const dueId = suggestionId((due as { id: string }).id);
     const missedIdSuggestion = suggestionId((missed as { id: string }).id);
@@ -147,6 +148,7 @@ export async function runLocalDemo(dataDir: string): Promise<DemoReport> {
       throw new Error("relay contents did not match the publish decisions");
     }
     parseCriteria(readFileSync(criteriaPath, "utf8"), profile.id);
+    await seedGallery({ store, profile, signer, now: clock.now() });
     return report;
   } finally {
     store.close();

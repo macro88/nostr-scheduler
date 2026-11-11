@@ -68,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ push }}>
       {children}
-      <div ref={stackNode} className="pointer-events-none fixed inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2" aria-live="polite">
+      <div ref={stackNode} className="toast-stack" aria-live="polite">
         {toasts.map((toast) => (
           <ToastCard key={toast.id} toast={toast} onDismiss={() => dismiss(toast.id)} />
         ))}
@@ -100,7 +100,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       role="status"
       data-testid={`toast-${toast.kind}`}
       tabIndex={0}
-      className="pointer-events-auto w-full max-w-md rounded-2xl border border-[#8a8478] bg-white px-4 py-3 text-sm shadow-sm"
+      className="toast"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -108,7 +108,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
     >
       <p>{toast.message}</p>
       {toast.detail ? (
-        <details className="mt-1 text-[#5c564c]">
+        <details className="caption">
           <summary>Technical detail</summary>
           <p>{toast.detail}</p>
         </details>

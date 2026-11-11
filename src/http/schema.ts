@@ -28,6 +28,12 @@ export const replyDraftSchema = z.object({
     rootId: z.string().regex(/^[0-9a-f]{64}$/),
     relayHint: z.string().optional(),
   }),
+  parent: z
+    .object({
+      at: z.number().int().nonnegative(),
+      content: z.string().trim().min(1),
+    })
+    .optional(),
 });
 
 export const draftSchema = z.discriminatedUnion("type", [noteDraftSchema, threadDraftSchema, replyDraftSchema]);
@@ -66,6 +72,7 @@ export const contextSchema = z.object({
 
 export const signNextSchema = z.object({
   profileId: z.string().min(1),
+  itemIds: z.array(z.string()).optional(),
 });
 
 export const signSubmitSchema = z.object({

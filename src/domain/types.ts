@@ -145,11 +145,17 @@ export type ReplyTarget = {
   readonly relayHint?: RelayUrl;
 };
 
+export type QuotedParent = {
+  readonly at: UnixSeconds;
+  readonly content: string;
+};
+
 export type ReplyDraft = {
   readonly type: "reply";
   readonly content: string;
   readonly proposedFireAt: UnixSeconds;
   readonly target: ReplyTarget;
+  readonly parent?: QuotedParent;
 };
 
 export type Draft = NoteDraft | ThreadDraft | ReplyDraft;

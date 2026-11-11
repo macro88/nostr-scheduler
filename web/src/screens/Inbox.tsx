@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
-import { Button, StatusBadge, Textarea } from "../components/ui";
 import { plainError } from "../errors";
 import { formatWhen } from "../format";
-import { usePendingSurface } from "../pending";
-import { EmptyState, InlineError, LoadingBlock } from "../states";
 import { singleKeyActive } from "../keys";
+import { kindWord } from "../labels";
+import { usePendingSurface } from "../pending";
+import { InlineError, LoadingBlock } from "../states";
 import { useToasts } from "../toasts";
 
 export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; shortcuts: boolean; onCompose: () => void }) {
@@ -68,22 +68,61 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
     },
     onError: (error) => toasts.push({ kind: "error", ...plainError(error) }),
   });
-  const queueReject = (item: Item, note: string) => {
-    setHidden((current) => [...current, item.id]);
-    setReason("");
-    setRejecting(false);
-    toasts.push({
-      kind: "undo",
-      message: "Suggestion rejected.",
-      onUndo: () => setHidden((current) => current.filter((id) => id !== item.id)),
-      onExpire: () => {
-        void api(`/api/items/${item.id}/reject`, { method: "POST", body: JSON.stringify({ reason: note }) })
-          .then(() => refresh())
-          .catch((error) => {
-            setHidden((current) => current.filter((id) => id !== item.id));
-            toasts.push({ kind: "error", ...plainError(error) });
-          });
-      },
+  const focusNext = (removedIndex: number) => {
+    const next = removedIndex < suggestions.length - 1 ? removedIndex : Math.max(0, suggestions.length - 2);
+    setIndex(next);
+    window.setTimeout(() => {
+      const rows = document.querySelectorAll<HTMLElement>("[data-testid='suggestion']");
+      const target = rows[next] ?? document.querySelector<HTMLElement>("[data-testid='empty'] button");
+      target?.focus();
+    }, 0);
+  };
+  const hideRow = (item: Item, source: "keyboard" | "pointer", done: () => void) => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const row = document.querySelector<HTMLElement>(`[data-row='${item.id}']`);
+    if (source === "pointer" && !reduced && row) {
+      row.classList.add("leaving");
+      window.setTimeout(done, 160);
+      return;
+    }
+    done();
+  };
+  const queueReject = (item: Item, note: string, source: "keyboard" | "pointer") => {
+    const removed = suggestions.findIndex((entry) => entry.id === item.id);
+    hideRow(item, source, () => {
+      setHidden((current) => [...current, item.id]);
+      setReason("");
+      setRejecting(false);
+      focusNext(removed);
+      toasts.push({
+        kind: "undo",
+        message: "Suggestion rejected.",
+        onUndo: () => setHidden((current) => current.filter((id) => id !== item.id)),
+        onExpire: () => {
+          void api(`/api/items/${item.id}/reject`, { method: "POST", body: JSON.stringify({ reason: note }) })
+            .then(() => refresh())
+            .catch((error) => {
+              setHidden((current) => current.filter((id) => id !== item.id));
+              toasts.push({ kind: "error", ...plainError(error) });
+            });
+        },
+      });
+    });
+  };
+  const approveRow = (item: Item, source: "keyboard" | "pointer") => {
+    const removed = suggestions.findIndex((entry) => entry.id === item.id);
+    hideRow(item, source, () => {
+      setHidden((current) => [...current, item.id]);
+      focusNext(removed);
+      void api(`/api/items/${item.id}/approve`, { method: "POST", body: "{}" })
+        .then(() => {
+          toasts.push({ kind: "success", message: "Approved." });
+          void refresh();
+        })
+        .catch((error) => {
+          setHidden((current) => current.filter((id) => id !== item.id));
+          toasts.push({ kind: "error", ...plainError(error) });
+        });
     });
   };
 
@@ -104,7 +143,7 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
         setIndex((value) => Math.max(0, value - 1));
       }
       if (event.key === "e" || event.key === "E") setEditing(true);
-      if ((event.key === "a" || event.key === "A") && selected) approve.mutate(selected.id);
+      if ((event.key === "a" || event.key === "A") && selected) approveRow(selected, "keyboard");
       if ((event.key === "r" || event.key === "R") && selected) {
         setRejecting(true);
         window.setTimeout(() => document.querySelector<HTMLInputElement>("[data-testid='reject-reason']")?.focus(), 0);
@@ -115,88 +154,127 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
   }, [approve, selected, shortcuts, suggestions.length]);
 
   return (
-    <section data-testid="inbox" aria-label="Inbox">
-        <p className="text-sm text-[#5c564c]">J and K to move, A to approve, E to edit, R to reject.</p>
-      {items.isPending && !items.data && !surface.loading ? <p className="sr-only">Loading suggestions</p> : null}
+    <>
+      <div className="page-head compact">
+        <div className="title-row">
+          <h1 id="section-title" tabIndex={-1}>
+            Inbox
+          </h1>
+          {suggestions.length > 0 ? <p className="page-kicker">{suggestions.length} waiting</p> : null}
+        </div>
+        <div className="kbd-hints" role="note" aria-label="Keyboard shortcuts">
+          <span className="kbd-group">
+            <kbd>J</kbd> <kbd>K</kbd> move
+          </span>
+          <span className="kbd-group">
+            <kbd>A</kbd> approve
+          </span>
+          <span className="kbd-group">
+            <kbd>E</kbd> edit
+          </span>
+          <span className="kbd-group">
+            <kbd>R</kbd> reject
+          </span>
+        </div>
+      </div>
+      {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading suggestions</p> : null}
       <LoadingBlock pending={surface.loading} label="Loading suggestions" />
       {items.isError ? <InlineError error={items.error} fallback="The suggestions could not be loaded. Try again." /> : null}
-      {surface.ready && !items.isError && suggestions.length === 0 ? (
-        <EmptyState title="Nothing is waiting." action={<Button onClick={onCompose}>Write a note</Button>} />
-      ) : null}
-      {surface.ready && suggestions.length > 0 ? (
-        <ul className="mt-6 space-y-3" aria-label="Suggestions">
-          {suggestions.map((item, itemIndex) => (
-            <li key={item.id}>
-              <article
-                data-testid="suggestion"
-                tabIndex={0}
-                aria-current={itemIndex === index ? "true" : undefined}
-                className={`rounded-3xl border bg-white p-5 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17] ${itemIndex === index ? "border-[#1c1b17]" : "border-[#e4dfd4]"}`}
-                onClick={() => setIndex(itemIndex)}
-                onFocus={() => setIndex(itemIndex)}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <StatusBadge status={item.status} />
-                  <time className="text-xs text-[#5c564c]" dateTime={item.fireAt[0] ? new Date(item.fireAt[0] * 1000).toISOString() : undefined}>
-                    {item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}
-                  </time>
+      {surface.ready && !items.isError ? (
+        <div className="desk">
+          {suggestions.length === 0 ? (
+            <div className="desk-empty inbox-list" data-testid="empty">
+              <p className="empty-title">Nothing is waiting.</p>
+              <button type="button" className="btn btn-primary" onClick={onCompose}>
+                Write a note
+              </button>
+            </div>
+          ) : (
+            <div className="inbox-list" role="listbox" aria-label="Suggestions">
+              {suggestions.map((item, itemIndex) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`inbox-item${itemIndex === index ? " selected" : ""}`}
+                  data-row={item.id}
+                  data-testid="suggestion"
+                  aria-selected={itemIndex === index}
+                  onClick={() => setIndex(itemIndex)}
+                >
+                  <div className="meta">
+                    <span className="status">{kindWord(item.draft?.type)}</span>
+                    <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+                  </div>
+                  <p className="preview note-md">{item.preview}</p>
+                </button>
+              ))}
+            </div>
+          )}
+          <section className="inbox-detail" aria-label="Selected suggestion">
+            {selected ? (
+              <>
+                <div className="detail-meta">
+                  <span className="status">{kindWord(selected.draft?.type)}</span>
+                  <time>{selected.fireAt[0] ? formatWhen(selected.fireAt[0]) : ""}</time>
                 </div>
-                {editing && itemIndex === index ? (
-                  <Textarea
-                    data-testid="edit-text"
-                    aria-label="Edit suggestion"
-                    className="mt-4"
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                  />
+                {editing ? (
+                  <textarea className="editor note-lg" data-testid="edit-text" aria-label="Edit suggestion" value={draft} onChange={(event) => setDraft(event.target.value)} />
                 ) : (
-                  <p className="mt-4 whitespace-pre-wrap text-lg leading-7">{item.preview}</p>
+                  <p className="detail-note note-lg">{selected.preview}</p>
                 )}
-                {item.rationale ? <p className="mt-3 text-sm text-[#5c564c]">{item.rationale}</p> : null}
-                {itemIndex === index ? (
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <Button data-testid="approve" onClick={() => approve.mutate(item.id)} disabled={approve.isPending}>
-                      Approve
-                    </Button>
-                    {editing ? (
-                      <Button data-testid="save-edit" variant="outline" onClick={() => edit.mutate()} disabled={edit.isPending}>
-                        Save edit
-                      </Button>
-                    ) : (
-                      <Button data-testid="edit" variant="outline" onClick={() => setEditing(true)}>
-                        Edit
-                      </Button>
-                    )}
-                    {rejecting ? (
-                      <>
-                        <input
-                          data-testid="reject-reason"
-                          aria-label="Reason for rejecting"
-                          className="h-10 flex-1 rounded-full border border-[#8a8478] bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]"
-                          placeholder="Reason for rejecting"
-                          value={reason}
-                          onChange={(event) => setReason(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" && reason.trim()) queueReject(item, reason.trim());
-                          }}
-                        />
-                        <Button data-testid="reject" variant="ghost" onClick={() => queueReject(item, reason.trim())} disabled={!reason.trim()}>
-                          Reject
-                        </Button>
-                      </>
-                    ) : (
-                      <Button data-testid="reject-open" variant="ghost" onClick={() => setRejecting(true)}>
-                        Reject
-                      </Button>
-                    )}
+                {selected.draft?.type === "reply" && selected.draft.parent ? (
+                  <div className="thread">
+                    <p className="thread-meta">{formatWhen(selected.draft.parent.at)}</p>
+                    <q>{selected.draft.parent.content}</q>
                   </div>
                 ) : null}
-                {itemIndex === index && (edit.error || approve.error) ? <InlineError error={edit.error ?? approve.error} /> : null}
-              </article>
-            </li>
-          ))}
-        </ul>
+                {selected.rationale ? (
+                  <p className="rationale">{selected.rationale.startsWith("Suggested because") ? selected.rationale : `Suggested because ${selected.rationale}`}</p>
+                ) : null}
+                <div className="actions">
+                  <button type="button" className="btn btn-primary" data-testid="approve" onClick={() => approveRow(selected, "pointer")} disabled={approve.isPending}>
+                    Approve
+                  </button>
+                  {editing ? (
+                    <button type="button" className="btn btn-outline" data-testid="save-edit" onClick={() => edit.mutate()} disabled={edit.isPending}>
+                      Save edit
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn-outline" data-testid="edit" onClick={() => setEditing(true)}>
+                      Edit
+                    </button>
+                  )}
+                  {rejecting ? (
+                    <>
+                      <input
+                        className="field"
+                        data-testid="reject-reason"
+                        aria-label="Reason for rejecting"
+                        placeholder="Reason for rejecting"
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && reason.trim()) queueReject(selected, reason.trim(), "keyboard");
+                        }}
+                      />
+                      <button type="button" className="btn btn-ghost" data-testid="reject" onClick={() => queueReject(selected, reason.trim(), "pointer")} disabled={!reason.trim()}>
+                        Reject
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="btn btn-ghost" data-testid="reject-open" onClick={() => setRejecting(true)}>
+                      Reject…
+                    </button>
+                  )}
+                </div>
+                {edit.error || approve.error ? <InlineError error={edit.error ?? approve.error} /> : null}
+              </>
+            ) : (
+              <p className="support">When a suggestion arrives, it opens here with the note, its time, and a way to approve it.</p>
+            )}
+          </section>
+        </div>
       ) : null}
-    </section>
+    </>
   );
 }
