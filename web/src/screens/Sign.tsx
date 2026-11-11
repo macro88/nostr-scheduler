@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { api, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
-import { Button, Input } from "../components/ui";
 import { plainError } from "../errors";
 import { formatWhen } from "../format";
 import { usePendingSurface } from "../pending";
-import { EmptyState, InlineError, LoadingBlock } from "../states";
+import { InlineError, LoadingBlock } from "../states";
+import { showCheck } from "../theme/motion";
 import { useToasts } from "../toasts";
 
 export function Sign({ profile }: { profile: Profile }) {
@@ -25,6 +25,7 @@ export function Sign({ profile }: { profile: Profile }) {
   });
   const [bunkerUri, setBunkerUri] = useState("");
   const [svg, setSvg] = useState("");
+  const [showQr, setShowQr] = useState(false);
   const [status, setStatus] = useState("");
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -40,6 +41,8 @@ export function Sign({ profile }: { profile: Profile }) {
         setStatus(steps > 1 ? `Waiting for the signer. ${index} of ${steps}` : "Waiting for the signer");
       }),
     onSuccess: (count) => {
+      const button = document.querySelector<HTMLElement>("[data-testid='sign-browser']");
+      if (button) showCheck(button);
       setStatus(`Queued ${count}`);
       toasts.push({ kind: "success", message: `Queued ${count}.` });
       void queryClient.invalidateQueries();
@@ -82,62 +85,84 @@ export function Sign({ profile }: { profile: Profile }) {
     },
   });
 
+  const progress =
+    browser.isPending || bunker.isPending
+      ? steps > 1
+        ? `Waiting for the signer. ${step} of ${steps}`
+        : "Waiting for the signer"
+      : status;
   return (
-    <section data-testid="sign" aria-label="Sign" className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-      <div className="rounded-3xl bg-white p-6">
-        <p className="text-sm text-[#5c564c]">Approved notes are signed here. A thread is signed root first, with each time left as scheduled.</p>
-        <p className="mt-4 text-sm" data-testid="sign-status" role="status">
-          {browser.isPending || bunker.isPending
-            ? steps > 1
-              ? `Waiting for the signer. ${step} of ${steps}`
-              : "Waiting for the signer"
-            : status || (waiting.length > 0 ? `${waiting.length} waiting to be signed.` : "")}
+    <section data-testid="sign" aria-label="Sign" className="sign-layout">
+      <div className="sign-hero">
+        <h1 id="section-title" tabIndex={-1}>
+          Sign
+        </h1>
+        <p className="page-kicker">{waiting.length} waiting to be signed</p>
+        <p className="sr" data-testid="sign-status" role="status">
+          {progress || (waiting.length > 0 ? `${waiting.length} waiting to be signed.` : "")}
         </p>
-        {items.isPending && !items.data && !surface.loading ? <p className="sr-only">Loading notes to sign</p> : null}
+        {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading notes to sign</p> : null}
         <LoadingBlock pending={surface.loading} label="Loading notes to sign" />
-        {surface.ready && !items.isError && waiting.length === 0 ? <EmptyState title="Nothing is waiting to be signed." /> : null}
-        <ul className="mt-4 space-y-2" aria-label="Notes waiting to be signed">
+        {surface.ready && !items.isError && waiting.length === 0 ? (
+          <div data-testid="empty">
+            <p>Nothing is waiting to be signed.</p>
+          </div>
+        ) : null}
+        <div className="work-list">
           {waiting.map((item) => (
-            <li key={item.id} className="rounded-2xl bg-[#f7f4ee] p-3 text-sm">
-              <span>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</span>
-              <p>{item.preview}</p>
-            </li>
+            <article key={item.id} className="work-row">
+              <span className="check on" aria-hidden="true" />
+              <div>
+                <div className="row-status">
+                  <span className="status">Approved</span>
+                  <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+                </div>
+                <p className="note-lg">{item.preview}</p>
+              </div>
+            </article>
           ))}
-        </ul>
+        </div>
         {items.isError ? <InlineError error={items.error} fallback="The notes could not be loaded. Try again." /> : null}
         {browser.error || bunker.error || pair.error ? <InlineError error={browser.error ?? bunker.error ?? pair.error} /> : null}
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Button data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending}>
-            Sign with browser
-          </Button>
-          <Button data-testid="sign-bunker" variant="outline" onClick={() => bunker.mutate()} disabled={!info.data?.paired || bunker.isPending}>
-            Sign with bunker
-          </Button>
+        <div className="sign-off">
+          <div className="ink-rule" aria-hidden="true" />
+          {steps > 1 && (browser.isPending || bunker.isPending) ? (
+            <div className="sign-progress" aria-hidden="true">
+              <span style={{ transform: `scaleX(${steps === 0 ? 0 : step / steps})` }} />
+            </div>
+          ) : null}
+          <div className="actions">
+            <button type="button" className="btn btn-primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || waiting.length === 0}>
+              {waiting.length > 1 ? `Sign ${waiting.length} notes` : "Sign notes"}
+            </button>
+            <button type="button" className="btn btn-outline" data-testid="sign-bunker" onClick={() => bunker.mutate()} disabled={!info.data?.paired || bunker.isPending}>
+              Sign with bunker
+            </button>
+          </div>
         </div>
       </div>
-      <div className="rounded-3xl bg-white p-6">
-        <h3 className="font-semibold">Bunker</h3>
-        <p className="mt-2 text-sm text-[#5c564c]">Paste a bunker link, or let the signer scan this code. Disconnect removes the session from this machine.</p>
-        <div
-          className="mt-4"
-          data-testid="pair-qr"
-          role={svg ? "img" : undefined}
-          aria-label={svg ? "Code for pairing a bunker" : undefined}
-          dangerouslySetInnerHTML={{ __html: svg.replace("<svg", '<svg aria-hidden="true" focusable="false"') }}
-        />
-        <Input data-testid="bunker-uri" aria-label="Bunker link" className="mt-4" placeholder="bunker://…" value={bunkerUri} onChange={(event) => setBunkerUri(event.target.value)} />
-        <div className="mt-3 flex gap-2">
-          <Button data-testid="pair" onClick={() => pair.mutate()} disabled={!bunkerUri.trim() || pair.isPending}>
+      <aside className="bunker-panel">
+        <h2>Bunker</h2>
+        <p className="support">Pair a remote signer when you do not want to use the browser. The pairing code stays hidden until you need it.</p>
+        <input className="field mono" data-testid="bunker-uri" aria-label="Bunker link" placeholder="bunker://" value={bunkerUri} onChange={(event) => setBunkerUri(event.target.value)} />
+        <div className="pair-row">
+          <button type="button" className="btn btn-outline btn-sm" data-testid="pair" onClick={() => pair.mutate()} disabled={!bunkerUri.trim() || pair.isPending}>
             Pair
-          </Button>
-          <Button data-testid="disconnect" variant="outline" onClick={() => disconnect.mutate()}>
+          </button>
+          <button type="button" className="btn btn-outline btn-sm" data-testid="disconnect" onClick={() => disconnect.mutate()}>
             Disconnect
-          </Button>
+          </button>
         </div>
-        <p className="mt-3 text-sm text-[#5c564c]" data-testid="pair-state">
+        <button type="button" className="btn btn-ghost" onClick={() => setShowQr((current) => !current)}>
+          {showQr ? "Hide pairing QR" : "Show pairing QR"}
+        </button>
+        {showQr ? (
+          <div data-testid="pair-qr" role="img" aria-label="Code for pairing a bunker" dangerouslySetInnerHTML={{ __html: svg.replace("<svg", '<svg aria-hidden="true" focusable="false"') }} />
+        ) : null}
+        <p className="bunker-status" data-testid="pair-state">
           {info.data?.paired ? "Paired" : "Not paired"}
         </p>
-      </div>
+      </aside>
     </section>
   );
 }
