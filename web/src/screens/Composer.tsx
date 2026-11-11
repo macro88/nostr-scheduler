@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
-import { formatWhen } from "../format";
+import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
 import { statusWord } from "../labels";
 import { InlineError } from "../states";
 import { useToasts } from "../toasts";
@@ -26,7 +26,15 @@ export function Composer({ profile }: { profile: Profile }) {
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
   });
-  const upcoming = (queue.data ?? []).filter((item) => ["approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status));
+  const weekStart = Math.floor(startOfWeek(new Date()).getTime() / 1000);
+  const weekEnd = weekStart + 7 * 24 * 60 * 60;
+  const upcoming = (queue.data ?? [])
+    .filter((item) => ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status))
+    .filter((item) => {
+      const at = item.fireAt[0] ?? 0;
+      return at >= weekStart && at < weekEnd;
+    })
+    .sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
 
@@ -83,7 +91,6 @@ export function Composer({ profile }: { profile: Profile }) {
         <h1 id="section-title" tabIndex={-1}>
           {title}
         </h1>
-        <p className="caption">Control or Command and Enter schedules.</p>
         <div className="tabs" role="group" aria-label="Post kind">
           {(["note", "thread", "reply"] as const).map((value) => (
             <button key={value} type="button" className="tab" aria-pressed={kind === value} data-testid={`kind-${value}`} onClick={() => setKind(value)}>
@@ -161,6 +168,7 @@ export function Composer({ profile }: { profile: Profile }) {
           </div>
         ) : null}
         <div className="composer-foot">
+          <p className="caption">Control or Command and Enter schedules.</p>
           <div className="composer-meta">
             <WhenField value={when} onChange={setWhen} invalid={Boolean(formError)} />
             <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
@@ -186,7 +194,7 @@ export function Composer({ profile }: { profile: Profile }) {
         <div className="queue-list">
           {upcoming.map((item) => (
             <article key={item.id} className="q-row">
-              <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+              <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
               <p className="q-preview note-md">{item.preview}</p>
               <StatusWord status={item.status} />
             </article>

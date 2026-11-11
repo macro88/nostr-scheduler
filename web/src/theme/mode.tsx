@@ -22,7 +22,11 @@ function apply(choice: Choice) {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
-const ThemeContext = createContext({ dark: false, toggle: () => undefined as void });
+const ThemeContext = createContext({
+  dark: false,
+  choice: "system" as Choice,
+  setChoice: (_choice: Choice) => undefined as void,
+});
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [choice, setChoice] = useState<Choice>(stored);
@@ -36,12 +40,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, [choice]);
-  const toggle = () => {
-    const next = dark ? "light" : "dark";
+  const choose = (next: Choice) => {
     localStorage.setItem(KEY, next);
     setChoice(next);
   };
-  return <ThemeContext.Provider value={{ dark, toggle }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ dark, choice, setChoice: choose }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

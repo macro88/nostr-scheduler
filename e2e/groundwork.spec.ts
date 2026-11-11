@@ -152,17 +152,21 @@ test("single-key shortcuts turn off and stay out of text fields", async ({ page 
     draft: { type: "note", content: "Shortcut note", proposedFireAt: fireAt },
   });
   await page.reload();
-  await page.getByTestId("profile").focus();
+  await page.getByTestId("profile").click();
   await page.keyboard.press("2");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Inbox");
   await page.getByTestId("shortcuts").uncheck();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("profile")).toBeFocused();
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
   await expect(page.getByTestId("toast-success")).toHaveCount(0);
   await expect(page.getByTestId("suggestion").filter({ hasText: "Shortcut note" })).toBeVisible();
   await page.reload();
+  await page.getByTestId("profile").click();
   await expect(page.getByTestId("shortcuts")).not.toBeChecked();
   await page.getByTestId("shortcuts").check();
+  await page.keyboard.press("Escape");
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
   await expect(page.getByTestId("toast-success")).toContainText("Approved");
@@ -294,6 +298,45 @@ test("the time control uses a 24-hour British date and refuses the past", async 
   await page.getByTestId("note-text").fill("too late");
   await page.getByTestId("save-draft").click();
   await expect(page.getByTestId("inline-error")).toContainText("This time is in the past.");
+  await relay.stop();
+});
+
+test("the time picker stays inside the viewport", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  for (const size of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 800 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.getByTestId("schedule").click();
+    const picker = page.getByTestId("time-picker");
+    await expect(picker).toBeVisible();
+    for (const name of ["time-day", "time-month", "time-year", "time-hour", "time-minute"]) {
+      await expect(page.getByTestId(name)).not.toHaveValue("");
+    }
+    const fitted = await picker.evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      const inside = box.top >= 0 && box.left >= 0 && box.right <= window.innerWidth + 1 && box.bottom <= window.innerHeight + 1;
+      const labels = [...node.querySelectorAll("label")].map((label) => label.getBoundingClientRect());
+      let overlap = false;
+      for (let i = 0; i < labels.length; i += 1) {
+        for (let j = i + 1; j < labels.length; j += 1) {
+          const a = labels[i];
+          const b = labels[j];
+          if (!a || !b) continue;
+          if (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) overlap = true;
+        }
+      }
+      const narrow = [...node.querySelectorAll("input")].some((input) => input.getBoundingClientRect().width < 64);
+      return inside && !overlap && !narrow;
+    });
+    expect(fitted, `${size.width}`).toBe(true);
+    await page.getByTestId("time-apply").click();
+  }
   await relay.stop();
 });
 

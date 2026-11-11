@@ -3,20 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, type Item } from "../api";
 import { plainError } from "../errors";
-import { formatWhen, sameLocalDay } from "../format";
+import { formatClock, formatQueueWhen, formatWhen, sameLocalDay, startOfWeek } from "../format";
 import { statusWord } from "../labels";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
 import { useToasts } from "../toasts";
 import { WhenField } from "../WhenField";
-
-function startOfWeek(date: Date): Date {
-  const next = new Date(date);
-  const day = (next.getDay() + 6) % 7;
-  next.setDate(next.getDate() - day);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
 
 const openHour = 7;
 const closeHour = 23;
@@ -42,7 +34,7 @@ export function Calendar({ profileId }: { profileId: string }) {
   confirmingRef.current = confirming;
   const surface = usePendingSurface(items.isPending && !items.data);
   const visible = (items.data ?? []).filter(
-    (item) => !hidden.includes(item.id) && ["approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
+    (item) => !hidden.includes(item.id) && ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
   );
   const days = mode === "week" ? Array.from({ length: 7 }, (_, index) => new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + index)) : [cursor];
   const canDiscard = selected?.status === "queued" || selected?.status === "signed";
@@ -142,6 +134,19 @@ export function Calendar({ profileId }: { profileId: string }) {
   }, [confirming]);
 
   const range = `${days[0]?.toLocaleDateString("en-GB", { day: "numeric" })}–${days.at(-1)?.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+  const inView = visible.filter((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && days.some((day) => sameLocalDay(new Date(at * 1000), day));
+  });
+  const upcoming = [...inView].sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
+  const nowUnix = Math.floor(now.getTime() / 1000);
+  const nextItem = upcoming.find((item) => (item.fireAt[0] ?? 0) >= nowUnix) ?? upcoming[0];
+  const todayCount = inView.filter((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && sameLocalDay(new Date(at * 1000), now);
+  }).length;
+  const toSign = (items.data ?? []).filter((item) => item.status === "approved").length;
+  const showNow = nowFraction > 0 && nowFraction < 1 && days.some((day) => sameLocalDay(day, now));
 
   return (
     <section data-testid="calendar" aria-label="Queue">
@@ -173,6 +178,26 @@ export function Calendar({ profileId }: { profileId: string }) {
           </button>
         </div>
       </div>
+      {mode === "week" && nextItem?.fireAt[0] ? (
+        <div className="next-up">
+          <div className="next-up-copy">
+            <time>{formatQueueWhen(nextItem.fireAt[0], now)}</time>
+            <p>{nextItem.preview}</p>
+            <StatusWord status={nextItem.status} />
+          </div>
+          <div className="counts" aria-label="This week">
+            <div>
+              <strong>{inView.length}</strong> this week
+            </div>
+            <div>
+              <strong>{todayCount}</strong> today
+            </div>
+            <div>
+              <strong>{toSign}</strong> to sign
+            </div>
+          </div>
+        </div>
+      ) : null}
       {publish.error ? <InlineError error={publish.error} /> : null}
       {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading the queue</p> : null}
       <LoadingBlock pending={surface.loading} label="Loading the queue" />
@@ -189,17 +214,29 @@ export function Calendar({ profileId }: { profileId: string }) {
             <div className="day-heads">
               {days.map((day) => (
                 <div key={day.toISOString()} className={`day-head${sameLocalDay(day, now) ? " today" : ""}`} data-today={sameLocalDay(day, now) ? "true" : undefined}>
-                  <p className="day-name">{sameLocalDay(day, now) ? "Today" : day.toLocaleDateString("en-GB", { weekday: "short" })}</p>
+                  <p className="day-name">
+                    {sameLocalDay(day, now) ? `${day.toLocaleDateString("en-GB", { weekday: "short" })}, today` : day.toLocaleDateString("en-GB", { weekday: "short" })}
+                  </p>
                   <p className="day-num">{day.getDate()}</p>
                 </div>
               ))}
             </div>
             <div className="hour-gutter" aria-hidden="true">
-              {Array.from({ length: span }, (_, index) => (
-                <span key={index} style={{ top: `${((index + 0) / span) * 100}%` }}>
-                  {String(openHour + index).padStart(2, "0")}:00
+              {Array.from({ length: span }, (_, index) => {
+                const hour = openHour + index;
+                const collide = showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) < 28;
+                if (collide) return null;
+                return (
+                  <span key={hour} style={{ top: `${(index / span) * 100}%` }}>
+                    {String(hour).padStart(2, "0")}:00
+                  </span>
+                );
+              })}
+              {showNow ? (
+                <span className="gutter-now" style={{ top: `${nowFraction * 100}%` }}>
+                  {formatClock(now)}
                 </span>
-              ))}
+              ) : null}
             </div>
             <div className="week-lanes">
               {nowFraction > 0 && nowFraction < 1 ? (
@@ -217,7 +254,7 @@ export function Calendar({ profileId }: { profileId: string }) {
                       return (
                         <button key={item.id} type="button" className="wevt" data-testid="calendar-item" style={{ top: `${Math.min(Math.max(fraction, 0), 0.92) * 100}%` }} onClick={() => setSelected(item)}>
                           <div className="meta">
-                            <time>{formatWhen(item.fireAt[0] ?? 0)}</time>
+                            <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                             <StatusWord status={item.status} />
                           </div>
                           <p className="note-sm">{item.preview}</p>
@@ -255,7 +292,7 @@ export function Calendar({ profileId }: { profileId: string }) {
                       })
                       .map((item) => (
                         <button key={item.id} type="button" className="slot-item" data-testid="calendar-item" onClick={() => setSelected(item)}>
-                          <time>{formatWhen(item.fireAt[0] ?? 0)}</time>
+                          <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                           <p className="note-md">{item.preview}</p>
                           <StatusWord status={item.status} />
                         </button>

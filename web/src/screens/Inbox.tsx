@@ -162,8 +162,19 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
           </h1>
           <p className="page-kicker">{suggestions.length} waiting</p>
         </div>
-        <div className="kbd-hints" role="note">
-          J and K to move, A to approve, E to edit, R to reject.
+        <div className="kbd-hints" role="note" aria-label="Keyboard shortcuts">
+          <span className="kbd-group">
+            <kbd>J</kbd> <kbd>K</kbd> move
+          </span>
+          <span className="kbd-group">
+            <kbd>A</kbd> approve
+          </span>
+          <span className="kbd-group">
+            <kbd>E</kbd> edit
+          </span>
+          <span className="kbd-group">
+            <kbd>R</kbd> reject
+          </span>
         </div>
       </div>
       {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading suggestions</p> : null}
@@ -211,7 +222,15 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
                 ) : (
                   <p className="detail-note note-lg">{selected.preview}</p>
                 )}
-                {selected.rationale ? <p className="rationale">{selected.rationale}</p> : null}
+                {selected.draft?.type === "reply" && selected.draft.parent ? (
+                  <div className="thread">
+                    <p className="thread-meta">{formatWhen(selected.draft.parent.at)}</p>
+                    <q>{selected.draft.parent.content}</q>
+                  </div>
+                ) : null}
+                {selected.rationale ? (
+                  <p className="rationale">{selected.rationale.startsWith("Suggested because") ? selected.rationale : `Suggested because ${selected.rationale}`}</p>
+                ) : null}
                 <div className="actions">
                   <button type="button" className="btn btn-primary" data-testid="approve" onClick={() => approveRow(selected, "pointer")} disabled={approve.isPending}>
                     Approve

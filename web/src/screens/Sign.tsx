@@ -17,7 +17,14 @@ export function Sign({ profile }: { profile: Profile }) {
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
   });
   const waiting = (items.data ?? []).filter((item) => item.status === "approved");
-  const steps = waiting.reduce((total, item) => total + (item.draft?.type === "thread" ? (item.draft.segments?.length ?? 1) : 1), 0);
+  const waitingKey = waiting.map((item) => item.id).join("|");
+  const [selected, setSelected] = useState<string[]>([]);
+  useEffect(() => {
+    setSelected(waitingKey ? waitingKey.split("|") : []);
+  }, [waitingKey]);
+  const chosen = waiting.filter((item) => selected.includes(item.id));
+  const steps = chosen.reduce((total, item) => total + (item.draft?.type === "thread" ? (item.draft.segments?.length ?? 1) : 1), 0);
+  const allOn = waiting.length > 0 && chosen.length === waiting.length;
   const surface = usePendingSurface(items.isPending && !items.data);
   const info = useQuery({
     queryKey: ["nip46", profile.id],
@@ -39,7 +46,7 @@ export function Sign({ profile }: { profile: Profile }) {
       signWithBrowser(profile.id, (index) => {
         setStep(index);
         setStatus(steps > 1 ? `Waiting for the signer. ${index} of ${steps}` : "Waiting for the signer");
-      }),
+      }, selected),
     onSuccess: (count) => {
       const button = document.querySelector<HTMLElement>("[data-testid='sign-browser']");
       if (button) showCheck(button);
@@ -109,18 +116,45 @@ export function Sign({ profile }: { profile: Profile }) {
           </div>
         ) : null}
         <div className="work-list">
-          {waiting.map((item) => (
-            <article key={item.id} className="work-row">
-              <span className="check on" aria-hidden="true" />
-              <div>
-                <div className="row-status">
-                  <span className="status">Approved</span>
-                  <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+          {waiting.length > 0 ? (
+            <div className="work-head">
+              <button
+                type="button"
+                role="checkbox"
+                className={`check${allOn ? " on" : ""}`}
+                aria-checked={allOn}
+                aria-label="Select all"
+                onClick={() => setSelected(allOn ? [] : waiting.map((item) => item.id))}
+              >
+                {allOn ? <CheckMark /> : null}
+              </button>
+              <span>Select all</span>
+            </div>
+          ) : null}
+          {waiting.map((item) => {
+            const on = selected.includes(item.id);
+            return (
+              <article key={item.id} className="work-row">
+                <button
+                  type="button"
+                  role="checkbox"
+                  className={`check${on ? " on" : ""}`}
+                  aria-checked={on}
+                  aria-label={`Select ${item.preview}`}
+                  onClick={() => setSelected((current) => (current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]))}
+                >
+                  {on ? <CheckMark /> : null}
+                </button>
+                <div>
+                  <div className="row-status">
+                    <span className="status">Approved</span>
+                    <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+                  </div>
+                  <p className="note-lg">{item.preview}</p>
                 </div>
-                <p className="note-lg">{item.preview}</p>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
         {items.isError ? <InlineError error={items.error} fallback="The notes could not be loaded. Try again." /> : null}
         {browser.error || bunker.error || pair.error ? <InlineError error={browser.error ?? bunker.error ?? pair.error} /> : null}
@@ -132,8 +166,8 @@ export function Sign({ profile }: { profile: Profile }) {
             </div>
           ) : null}
           <div className="actions">
-            <button type="button" className="btn btn-primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || waiting.length === 0}>
-              {waiting.length > 1 ? `Sign ${waiting.length} notes` : "Sign notes"}
+            <button type="button" className="btn btn-primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || chosen.length === 0}>
+              {chosen.length === 1 ? "Sign note" : chosen.length > 1 ? `Sign ${chosen.length} notes` : "Sign notes"}
             </button>
             <button type="button" className="btn btn-outline" data-testid="sign-bunker" onClick={() => bunker.mutate()} disabled={!info.data?.paired || bunker.isPending}>
               Sign with bunker
@@ -149,7 +183,7 @@ export function Sign({ profile }: { profile: Profile }) {
           <button type="button" className="btn btn-outline btn-sm" data-testid="pair" onClick={() => pair.mutate()} disabled={!bunkerUri.trim() || pair.isPending}>
             Pair
           </button>
-          <button type="button" className="btn btn-outline btn-sm" data-testid="disconnect" onClick={() => disconnect.mutate()}>
+          <button type="button" className="btn btn-outline btn-sm" data-testid="disconnect" onClick={() => disconnect.mutate()} disabled={!info.data?.paired || disconnect.isPending}>
             Disconnect
           </button>
         </div>
@@ -164,5 +198,13 @@ export function Sign({ profile }: { profile: Profile }) {
         </p>
       </aside>
     </section>
+  );
+}
+
+function CheckMark() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12l5 5L20 7" />
+    </svg>
   );
 }
