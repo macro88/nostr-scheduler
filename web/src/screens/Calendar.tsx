@@ -140,7 +140,11 @@ export function Calendar({ profileId }: { profileId: string }) {
   });
   const upcoming = [...inView].sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
   const nowUnix = Math.floor(now.getTime() / 1000);
-  const nextItem = upcoming.find((item) => (item.fireAt[0] ?? 0) >= nowUnix) ?? upcoming[0];
+  const currentItem = [...upcoming].reverse().find((item) => {
+    const at = item.fireAt[0];
+    return at !== undefined && at <= nowUnix && sameLocalDay(new Date(at * 1000), now);
+  });
+  const nextItem = currentItem ?? upcoming.find((item) => (item.fireAt[0] ?? 0) >= nowUnix) ?? upcoming[0];
   const todayCount = inView.filter((item) => {
     const at = item.fireAt[0];
     return at !== undefined && sameLocalDay(new Date(at * 1000), now);
@@ -224,7 +228,7 @@ export function Calendar({ profileId }: { profileId: string }) {
             <div className="hour-gutter" aria-hidden="true">
               {Array.from({ length: span }, (_, index) => {
                 const hour = openHour + index;
-                const collide = showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) < 28;
+                const collide = showNow && Math.abs(hour * 60 - (now.getHours() * 60 + now.getMinutes())) <= 20;
                 if (collide) return null;
                 return (
                   <span key={hour} style={{ top: `${(index / span) * 100}%` }}>
@@ -272,10 +276,12 @@ export function Calendar({ profileId }: { profileId: string }) {
           <div className="hours">
             {Array.from({ length: span }, (_, index) => {
               const hour = openHour + index;
+              const minutesNow = now.getHours() * 60 + now.getMinutes();
               const showNow = sameLocalDay(cursor, now) && now.getHours() === hour;
+              const nearLabel = sameLocalDay(cursor, now) && Math.abs(hour * 60 - minutesNow) <= 20;
               return (
-                <div key={hour} className="hour" data-today={showNow ? "true" : undefined}>
-                  <p className="hour-label">{showNow ? null : `${String(hour).padStart(2, "0")}:00`}</p>
+                <div key={hour} className="hour" data-today={nearLabel ? "true" : undefined}>
+                  <p className={`hour-label${nearLabel ? " is-now" : ""}`}>{`${String(hour).padStart(2, "0")}:00`}</p>
                   <div className="hour-lane">
                     {showNow ? (
                       <div className="now-line" style={{ top: `${(now.getMinutes() / 60) * 100}%` }} aria-label={`Now, ${formatWhen(now)}`}>

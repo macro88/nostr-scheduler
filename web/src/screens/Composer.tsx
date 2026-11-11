@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
 import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
 import { statusWord } from "../labels";
@@ -35,6 +35,17 @@ export function Composer({ profile }: { profile: Profile }) {
       return at >= weekStart && at < weekEnd;
     })
     .sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
+  useLayoutEffect(() => {
+    const node = editor.current;
+    if (!node) return;
+    if (!window.matchMedia("(max-width: 800px)").matches) {
+      node.style.height = "";
+      return;
+    }
+    node.style.height = "auto";
+    node.style.height = `${Math.max(node.scrollHeight, 120)}px`;
+    node.scrollTop = 0;
+  }, [note, reply, parts, kind]);
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
 
