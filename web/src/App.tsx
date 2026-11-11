@@ -6,6 +6,7 @@ import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
 import { Log } from "./screens/Log";
 import { Sign } from "./screens/Sign";
+import { readShortcutsEnabled, singleKeyActive, writeShortcutsEnabled } from "./keys";
 import { ToastProvider } from "./toasts";
 
 const views = ["inbox", "compose", "calendar", "log", "sign"] as const;
@@ -16,6 +17,7 @@ export function App() {
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: () => api<Profile[]>("/api/profiles") });
   const [profileId, setProfileId] = useState("");
   const [view, setView] = useState<View>("inbox");
+  const [shortcuts, setShortcuts] = useState(() => readShortcutsEnabled(typeof localStorage === "undefined" ? null : localStorage));
   const heading = useRef<HTMLHeadingElement>(null);
   const firstView = useRef(true);
   const selected = profiles.data?.find((profile) => profile.id === profileId) ?? profiles.data?.[0];
@@ -56,8 +58,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && ["INPUT", "TEXTAREA"].includes(target.tagName)) return;
+      if (!singleKeyActive(shortcuts, event.target)) return;
       if (event.key === "1") setView("inbox");
       if (event.key === "2") setView("compose");
       if (event.key === "3") setView("calendar");
@@ -66,7 +67,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [shortcuts]);
 
   return (
     <ToastProvider>
@@ -74,16 +75,34 @@ export function App() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-[#5c564c]">Local scheduler</p>
-          <h1 ref={heading} tabIndex={-1} className="mt-1 text-3xl font-semibold tracking-tight outline-none">
+          <h1
+            ref={heading}
+            tabIndex={-1}
+            className="mt-1 text-3xl font-semibold tracking-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]"
+          >
             {titles[view]}
           </h1>
         </div>
+        <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm text-[#5c564c]">
+          <input
+            type="checkbox"
+            data-testid="shortcuts"
+            checked={shortcuts}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              writeShortcutsEnabled(localStorage, enabled);
+              setShortcuts(enabled);
+            }}
+          />
+          Single-key shortcuts
+        </label>
         <label className="text-sm text-[#5c564c]">
           Profile
           <select
             data-testid="profile"
             aria-label="Profile"
-            className="ml-2 h-10 rounded-full border border-[#d9d3c7] bg-white px-3"
+            className="ml-2 h-10 rounded-full border border-[#8a8478] bg-white px-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]"
             value={selected?.id ?? ""}
             onChange={(event) => setProfileId(event.target.value)}
           >
@@ -94,6 +113,7 @@ export function App() {
             ))}
           </select>
         </label>
+        </div>
       </header>
       <nav className="mt-6 flex gap-2" aria-label="Sections">
         {views.map((name, index) => (
@@ -111,7 +131,7 @@ export function App() {
       </nav>
       <main className="mt-8">
         {!selected && !profiles.isPending ? <p>Add a profile in the data directory to begin.</p> : null}
-        {selected && view === "inbox" ? <Inbox profile={selected} onCompose={() => setView("compose")} /> : null}
+        {selected && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
         {selected && view === "compose" ? <Composer profile={selected} /> : null}
         {selected && view === "calendar" ? <Calendar profileId={selected.id} /> : null}
         {selected && view === "log" ? <Log /> : null}

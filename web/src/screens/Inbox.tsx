@@ -6,9 +6,10 @@ import { plainError } from "../errors";
 import { formatWhen } from "../format";
 import { usePendingSurface } from "../pending";
 import { EmptyState, InlineError, LoadingBlock } from "../states";
+import { singleKeyActive } from "../keys";
 import { useToasts } from "../toasts";
 
-export function Inbox({ profile, onCompose }: { profile: Profile; onCompose: () => void }) {
+export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; shortcuts: boolean; onCompose: () => void }) {
   const queryClient = useQueryClient();
   const toasts = useToasts();
   const items = useQuery({
@@ -88,14 +89,12 @@ export function Inbox({ profile, onCompose }: { profile: Profile; onCompose: () 
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing = target && ["INPUT", "TEXTAREA"].includes(target.tagName);
       if (event.key === "Escape") {
         setEditing(false);
         setRejecting(false);
         return;
       }
-      if (typing) return;
+      if (!singleKeyActive(shortcuts, event.target)) return;
       if (event.key === "j" || event.key === "J") {
         focusCard.current = true;
         setIndex((value) => Math.min(suggestions.length - 1, value + 1));
@@ -113,11 +112,11 @@ export function Inbox({ profile, onCompose }: { profile: Profile; onCompose: () 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [approve, selected, suggestions.length]);
+  }, [approve, selected, shortcuts, suggestions.length]);
 
   return (
     <section data-testid="inbox" aria-label="Inbox">
-      <p className="text-sm text-[#5c564c]">J and K move. A approves. E edits. R rejects.</p>
+        <p className="text-sm text-[#5c564c]">J and K to move, A to approve, E to edit, R to reject.</p>
       {items.isPending && !items.data && !surface.loading ? <p className="sr-only">Loading suggestions</p> : null}
       <LoadingBlock pending={surface.loading} label="Loading suggestions" />
       {items.isError ? <InlineError error={items.error} fallback="The suggestions could not be loaded. Try again." /> : null}
@@ -173,7 +172,7 @@ export function Inbox({ profile, onCompose }: { profile: Profile; onCompose: () 
                         <input
                           data-testid="reject-reason"
                           aria-label="Reason for rejecting"
-                          className="h-10 flex-1 rounded-full border border-[#d9d3c7] px-3 text-sm"
+                          className="h-10 flex-1 rounded-full border border-[#8a8478] bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1b17]"
                           placeholder="Reason for rejecting"
                           value={reason}
                           onChange={(event) => setReason(event.target.value)}

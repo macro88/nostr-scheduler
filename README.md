@@ -84,7 +84,7 @@ node src/cli/main.ts disconnect
 
 The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file after a short undo. Compose schedules a note, a thread, or a reply, then clears the editor. The queue shows the week or the day. An unsigned time can move. A signed time is frozen, and removing a signed or queued item asks you to confirm.
 
-Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. Keys 1 to 5 switch sections. In the inbox, J and K move, A approves, E edits, and R rejects. Control and Enter schedules from the editor. Escape closes a panel.
+Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. Keys 1 to 5 switch sections. In the inbox, J and K to move, A to approve, E to edit, R to reject. Control or Command and Enter schedules from the editor. Escape closes a panel. Single-key shortcuts can be turned off, and the choice is kept in this browser.
 
 If a change fails, the page says what to do next. The technical detail stays behind a disclosure. Signing says how far through a batch you are only when more than one note is being signed.
 
