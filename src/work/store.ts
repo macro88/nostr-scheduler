@@ -180,13 +180,14 @@ export class WorkStore {
     draft: Draft;
     rationale: string;
     at: UnixSeconds;
+    id?: SuggestionId;
   }): Suggestion {
     if (args.suggesterId !== args.profile.suggesterId) {
       throw new Error("this profile has a different suggester");
     }
     const item: Suggestion = {
       status: "suggestion",
-      id: suggestionId(`sug_${randomBytes(8).toString("hex")}`),
+      id: args.id ?? suggestionId(`sug_${randomBytes(8).toString("hex")}`),
       profileId: args.profile.id,
       suggesterId: args.suggesterId,
       draft: args.draft,
