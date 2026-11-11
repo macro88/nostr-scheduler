@@ -57,15 +57,18 @@ export function resetToken(): void {
   token = "";
 }
 
-export async function signWithBrowser(profileId: string): Promise<number> {
-  if (!window.nostr) throw new Error("No browser signer is available.");
+export async function signWithBrowser(profileId: string, onStep?: (index: number) => void): Promise<number> {
+  if (!window.nostr) throw new Error("no browser signer");
   let count = 0;
+  let step = 0;
   for (let guard = 0; guard < 40; guard += 1) {
     const next = await api<{ done: boolean; itemId?: string; unsigned?: Unsigned }>("/api/sign/nip07/next", {
       method: "POST",
       body: JSON.stringify({ profileId }),
     });
     if (next.done || !next.unsigned || !next.itemId) return count;
+    step += 1;
+    onStep?.(step);
     const signed = await window.nostr.signEvent(next.unsigned);
     const saved = await api<{ done: boolean }>("/api/sign/nip07/submit", {
       method: "POST",

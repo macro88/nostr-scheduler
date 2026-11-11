@@ -2,7 +2,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export function cn(...values: Parameters<typeof clsx>) {
   return twMerge(clsx(values));
@@ -49,9 +49,10 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(props, ref) {
   return (
     <textarea
+      ref={ref}
       {...props}
       className={cn(
         "min-h-28 w-full rounded-2xl border border-[#d9d3c7] bg-white px-4 py-3 text-[15px] leading-6 outline-none focus:border-[#1c1b17]",
@@ -59,7 +60,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
       )}
     />
   );
-}
+});
 
 const tones: Record<string, string> = {
   suggestion: "bg-[#efe8d8] text-[#5c5346]",
