@@ -119,6 +119,25 @@ A second run is safe. It clears the demo directory and produces a new event id.
 
 `pnpm demo:harness` signs one kind-1 note, publishes it to the local relay, and reads it back. It prints `accepted <id>` and `read <id>`.
 
+## Local relay
+
+`pnpm relay:local` starts that same in-memory relay and leaves it running until Ctrl-C. It listens only on `127.0.0.1:7777`. It is a loopback test relay, and it never forwards an event to a real relay.
+
+```bash
+pnpm relay:local
+```
+
+The process prints `relay ws://127.0.0.1:7777`. Put that URL in the profile's relay list in `data/profiles.yaml`.
+
+```yaml
+    relays:
+      - ws://127.0.0.1:7777
+```
+
+Each accepted event prints one line with its id, kind, and `created_at`. The note text is not printed. Events stay in memory and are lost when the process stops.
+
+Change the port with `--port` or `NOSTR_SCHEDULER_RELAY_PORT`. The host stays `127.0.0.1`.
+
 ## Safety defaults
 
 These are the v1 defaults. They are also listed in `DEFAULTS.md`.
