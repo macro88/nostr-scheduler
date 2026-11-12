@@ -26,12 +26,16 @@ export function formatClock(value: Date | number): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function nextLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+}
+
 export function formatQueueWhen(value: number, now = new Date()): string {
   const date = new Date(value * 1000);
   const clock = formatClock(date);
   if (sameLocalDay(date, now)) return `Today, ${clock}`;
-  const weekday = date.toLocaleDateString("en-GB", { weekday: "short" });
-  return `${weekday} ${date.getDate()}, ${clock}`;
+  if (sameLocalDay(date, nextLocalDay(now))) return `Tomorrow, ${clock}`;
+  return formatWhen(date);
 }
 
 export function startOfWeek(date: Date): Date {

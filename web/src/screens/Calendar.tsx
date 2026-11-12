@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { api, type Item } from "../api";
 import { plainError } from "../errors";
+import { weekExcerpt } from "../excerpt";
 import { formatClock, formatQueueWhen, formatWhen, sameLocalDay, startOfWeek } from "../format";
 import { statusWord } from "../labels";
 import { usePendingSurface } from "../pending";
@@ -278,13 +279,12 @@ export function Calendar({ profileId }: { profileId: string }) {
                       const date = new Date((item.fireAt[0] ?? 0) * 1000);
                       const fraction = (date.getHours() + date.getMinutes() / 60 - openHour) / span;
                       return (
-                        <button key={item.id} type="button" className="wevt" data-testid="calendar-item" style={{ top: `${Math.min(Math.max(fraction, 0), 0.92) * 100}%` }} onClick={() => setSelected(item)}>
-                          <div className="meta">
-                            <time>{formatClock(item.fireAt[0] ?? 0)}</time>
-                            <StatusWord status={item.status} />
-                          </div>
-                          <p className="note-sm">{item.preview}</p>
-                        </button>
+                        <WeekCard
+                          key={item.id}
+                          item={item}
+                          top={`${Math.min(Math.max(fraction, 0), 0.92) * 100}%`}
+                          onSelect={() => setSelected(item)}
+                        />
                       );
                     })}
                 </div>
@@ -351,7 +351,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {selected ? (
         <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
           <p>
-            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatWhen(selected.fireAt[0]) : ""}
+            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
           </p>
           <p className="note-md">{selected.preview}</p>
           {canDiscard ? (
@@ -397,6 +397,33 @@ export function Calendar({ profileId }: { profileId: string }) {
           )
         : null}
     </section>
+  );
+}
+
+function WeekCard({ item, top, onSelect }: { item: Item; top: string; onSelect: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [tall, setTall] = useState(false);
+  const excerpt = weekExcerpt(item.preview);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => setTall(node.getBoundingClientRect().height >= 44);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <button ref={ref} type="button" className="wevt" data-testid="calendar-item" style={{ top }} onClick={onSelect}>
+      <div className="wevt-fit">
+        <div className="meta">
+          <time>{formatClock(item.fireAt[0] ?? 0)}</time>
+          <StatusWord status={item.status} />
+        </div>
+        <p className="note-sm">{item.preview}</p>
+        {excerpt && tall ? <p className="wevt-excerpt">{excerpt}</p> : null}
+      </div>
+    </button>
   );
 }
 

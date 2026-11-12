@@ -224,7 +224,7 @@ export function Composer({ profile }: { profile: Profile }) {
         <div className="queue-list">
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
-              <time>{item.fireAt[0] ? (item.id === "composer-draft" ? formatWhen(item.fireAt[0]) : formatQueueWhen(item.fireAt[0])) : ""}</time>
+              <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
               <p className="q-preview note-md">{item.preview}</p>
               <StatusWord status={item.status} />
             </article>

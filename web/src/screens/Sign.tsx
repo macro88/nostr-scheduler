@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { api, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
 import { plainError } from "../errors";
-import { formatWhen } from "../format";
+import { formatQueueWhen } from "../format";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
 import { showCheck } from "../theme/motion";
@@ -148,7 +148,7 @@ export function Sign({ profile }: { profile: Profile }) {
                 <div>
                   <div className="row-status">
                     <span className="status">Approved</span>
-                    <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+                    <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
                   </div>
                   <p className="note-lg">{item.preview}</p>
                 </div>
