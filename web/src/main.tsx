@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ThemeProvider } from "./theme/mode";
-import "./theme/tokens.css";
+import "./theme/entry.css";
 import "./theme/fonts.css";
 import "./theme/layout.css";
 

@@ -9,7 +9,7 @@ import { Inbox } from "./screens/Inbox";
 import { Log } from "./screens/Log";
 import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
-import { ToastProvider } from "./toasts";
+import { Toaster } from "./toasts";
 
 const views = ["inbox", "compose", "calendar", "log", "sign"] as const;
 type View = (typeof views)[number];
@@ -110,7 +110,8 @@ export function App() {
   }, [menuOpen]);
 
   return (
-    <ToastProvider>
+    <>
+      <Toaster />
       <header>
         <div className="brand-nav">
           <span className="wordmark">Scheduler</span>
@@ -201,6 +202,6 @@ export function App() {
         {selected && view === "log" ? <Log /> : null}
         {selected && view === "sign" ? <Sign profile={selected} /> : null}
       </main>
-    </ToastProvider>
+    </>
   );
 }

@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@macro88/ui";
 import { api, type Item } from "../api";
 import { formatQueueWhen } from "../format";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
+import { StatusMark } from "../status";
 
 export function Log() {
   const log = useQuery({ queryKey: ["log"], queryFn: () => api<Item[]>("/api/log") });
@@ -22,7 +24,7 @@ export function Log() {
       {log.isError ? <InlineError error={log.error} fallback="The log could not be loaded. Try again." /> : null}
       {surface.ready && !log.isError && (log.data ?? []).length === 0 ? (
         <div data-testid="empty">
-          <p>Nothing has been sent yet.</p>
+          <EmptyState title="Nothing has been sent yet." />
         </div>
       ) : null}
       <div className="log-list">
@@ -37,7 +39,7 @@ export function Log() {
                 </div>
               ))}
             </div>
-            {item.status === "failed" ? <span className="status-flag status-failed">Failed</span> : <span className="status">Sent</span>}
+            <StatusMark status={item.status} />
           </article>
         ))}
       </div>

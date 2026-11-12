@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { Button, ConfirmSheet, EmptyState } from "@macro88/ui";
 import { api, type Item } from "../api";
 import { plainError } from "../errors";
 import { weekExcerpt } from "../excerpt";
 import { formatClock, formatQueueWhen, formatWhen, sameLocalDay, startOfWeek } from "../format";
-import { statusWord } from "../labels";
 import { usePendingSurface } from "../pending";
+import { StatusMark } from "../status";
 import { InlineError, LoadingBlock } from "../states";
-import { useToasts } from "../toasts";
+import { notifyError, notifySuccess, notifyUndo } from "../toasts";
 import { WhenField } from "../WhenField";
 
 const weekOpen = 7;
@@ -18,7 +18,6 @@ const dayClose = 21;
 
 export function Calendar({ profileId }: { profileId: string }) {
   const queryClient = useQueryClient();
-  const toasts = useToasts();
   const items = useQuery({
     queryKey: ["items", profileId],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profileId}`),
@@ -31,10 +30,19 @@ export function Calendar({ profileId }: { profileId: string }) {
   const [hidden, setHidden] = useState<string[]>([]);
   const detailRef = useRef<HTMLDivElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const confirmingRef = useRef(false);
   confirmingRef.current = confirming;
+  const confirmWasOpen = useRef(false);
+  useEffect(() => {
+    if (confirming) {
+      confirmWasOpen.current = true;
+      return;
+    }
+    if (!confirmWasOpen.current) return;
+    confirmWasOpen.current = false;
+    discardRef.current?.focus();
+  }, [confirming]);
   const surface = usePendingSurface(items.isPending && !items.data);
   const visible = (items.data ?? []).filter(
     (item) => !hidden.includes(item.id) && ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
@@ -64,27 +72,26 @@ export function Calendar({ profileId }: { profileId: string }) {
     onSuccess: () => {
       setSelected(null);
       setConfirming(false);
-      toasts.push({ kind: "success", message: "Removed from the queue." });
+      notifySuccess("Removed from the queue.");
       void queryClient.invalidateQueries({ queryKey: ["items", profileId] });
     },
-    onError: (error) => toasts.push({ kind: "error", ...plainError(error) }),
+    onError: (error) => notifyError(plainError(error).message),
   });
   const undoDiscard = (item: Item) => {
     setHidden((current) => [...current, item.id]);
     setSelected(null);
-    toasts.push({
-      kind: "undo",
-      message: "Draft removed.",
-      onUndo: () => setHidden((current) => current.filter((id) => id !== item.id)),
-      onExpire: () => {
+    notifyUndo(
+      "Draft removed.",
+      () => setHidden((current) => current.filter((id) => id !== item.id)),
+      () => {
         void api(`/api/items/${item.id}/discard`, { method: "POST", body: JSON.stringify({ reason: "removed" }) })
           .then(() => queryClient.invalidateQueries({ queryKey: ["items", profileId] }))
           .catch((error) => {
             setHidden((current) => current.filter((id) => id !== item.id));
-            toasts.push({ kind: "error", ...plainError(error) });
+            notifyError(plainError(error).message);
           });
       },
-    });
+    );
   };
   const publish = useMutation({
     mutationFn: () => api("/api/publish", { method: "POST", body: "{}" }),
@@ -93,16 +100,11 @@ export function Calendar({ profileId }: { profileId: string }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (confirmingRef.current) {
-        event.preventDefault();
-        setConfirming(false);
-        return;
-      }
+      if (event.key !== "Escape" || confirmingRef.current) return;
       setSelected(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
   useEffect(() => {
     const align = () => {
@@ -125,35 +127,6 @@ export function Calendar({ profileId }: { profileId: string }) {
     window.addEventListener("resize", align);
     return () => window.removeEventListener("resize", align);
   }, [mode, cursor]);
-  useEffect(() => {
-    if (!confirming) return;
-    const dialog = dialogRef.current;
-    const focusable = () =>
-      dialog ? [...dialog.querySelectorAll<HTMLElement>("button, [href], input, select, textarea")].filter((node) => !node.hasAttribute("disabled")) : [];
-    const root = document.getElementById("root");
-    root?.setAttribute("inert", "");
-    focusable()[0]?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Tab") return;
-      const nodes = focusable();
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      root?.removeAttribute("inert");
-      discardRef.current?.focus();
-    };
-  }, [confirming]);
 
   const range = `${days[0]?.toLocaleDateString("en-GB", { day: "numeric" })}–${days.at(-1)?.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
   const inView = visible.filter((item) => {
@@ -184,9 +157,9 @@ export function Calendar({ profileId }: { profileId: string }) {
           <p className="page-kicker">{mode === "week" ? range : cursor.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}</p>
         </div>
         <div className="toolbar">
-          <button type="button" className="btn btn-outline btn-sm" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
+          <Button type="button" variant="outline" size="sm" data-testid="prev" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() - (mode === "week" ? 7 : 1)))}>
             Previous
-          </button>
+          </Button>
           <div className="seg" role="group" aria-label="View">
             <button type="button" aria-pressed={mode === "week"} data-testid="view-week" onClick={() => { setMode("week"); setCursor(startOfWeek(cursor)); }}>
               Week
@@ -195,13 +168,13 @@ export function Calendar({ profileId }: { profileId: string }) {
               Day
             </button>
           </div>
-          <button type="button" className="btn btn-outline btn-sm" data-testid="next" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + (mode === "week" ? 7 : 1)))}>
+          <Button type="button" variant="outline" size="sm" data-testid="next" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + (mode === "week" ? 7 : 1)))}>
             Next
-          </button>
+          </Button>
           <span className="spacer" />
-          <button type="button" className="btn btn-primary btn-sm" data-testid="publish-due" onClick={() => publish.mutate()} disabled={publish.isPending}>
+          <Button type="button" variant="primary" data-testid="publish-due" onClick={() => publish.mutate()} disabled={publish.isPending}>
             Publish due
-          </button>
+          </Button>
         </div>
       </div>
       {mode === "week" && nextItem?.fireAt[0] ? (
@@ -209,7 +182,7 @@ export function Calendar({ profileId }: { profileId: string }) {
           <div className="next-up-copy">
             <time>{formatQueueWhen(nextItem.fireAt[0], now)}</time>
             <p>{nextItem.preview}</p>
-            <StatusWord status={nextItem.status} />
+            <StatusMark status={nextItem.status} />
           </div>
           <div className="counts" aria-label="This week">
             <div>
@@ -230,7 +203,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {items.isError ? <InlineError error={items.error} fallback="The queue could not be loaded. Try again." /> : null}
       {surface.ready && !items.isError && visible.length === 0 ? (
         <div data-testid="empty">
-          <p>{mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."}</p>
+          <EmptyState title={mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."} />
         </div>
       ) : null}
       {surface.ready && mode === "week" ? (
@@ -336,7 +309,7 @@ export function Calendar({ profileId }: { profileId: string }) {
                           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                           <p className="note-md">{item.preview}</p>
                           <span className="slot-status">
-                            <StatusWord status={item.status} />
+                            <StatusMark status={item.status} />
                           </span>
                         </button>
                         );
@@ -348,10 +321,10 @@ export function Calendar({ profileId }: { profileId: string }) {
           </div>
         </div>
       ) : null}
-      {selected ? (
+      {selected && !confirming ? (
         <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
           <p>
-            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
+            <StatusMark status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
           </p>
           <p className="note-md">{selected.preview}</p>
           {canDiscard ? (
@@ -359,43 +332,38 @@ export function Calendar({ profileId }: { profileId: string }) {
               {selected.status === "signed" ? (
                 <p data-testid="frozen-note">This event is signed, so the time is frozen. Discard it and sign again to choose a new time.</p>
               ) : null}
-              <button ref={discardRef} type="button" className="btn btn-outline" data-testid="discard" onClick={() => setConfirming(true)}>
+              <Button ref={discardRef} type="button" variant="outline" data-testid="discard" onClick={() => setConfirming(true)}>
                 Discard
-              </button>
+              </Button>
             </div>
           ) : null}
           {canMove ? (
             <div className="actions">
               <WhenField value={when} onChange={setWhen} testId="reschedule" />
-              <button type="button" className="btn btn-outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
+              <Button type="button" variant="outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
                 Move time
-              </button>
-              <button type="button" className="btn btn-ghost" data-testid="remove-draft" onClick={() => undoDiscard(selected)}>
+              </Button>
+              <Button type="button" variant="ghost" data-testid="remove-draft" onClick={() => undoDiscard(selected)}>
                 Remove
-              </button>
+              </Button>
             </div>
           ) : null}
           {reschedule.error || discard.error ? <InlineError error={reschedule.error ?? discard.error} /> : null}
         </div>
       ) : null}
-      {confirming && canDiscard
-        ? createPortal(
-            <div className="sheet-backdrop">
-              <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-title" data-testid="confirm-discard" className="sheet">
-                <p id="confirm-title">Discard this item from the queue?</p>
-                <div className="actions">
-                  <button type="button" className="btn btn-primary" data-testid="confirm-remove" onClick={() => discard.mutate()}>
-                    Discard
-                  </button>
-                  <button type="button" className="btn btn-outline" onClick={() => setConfirming(false)}>
-                    Keep
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <ConfirmSheet
+        open={confirming && canDiscard}
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) window.setTimeout(() => discardRef.current?.focus(), 0);
+        }}
+        title="Discard this item from the queue?"
+        description="This takes it off the queue. Sign a new note if you still want it sent."
+        confirmLabel="Discard"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={() => discard.mutate()}
+      />
     </section>
   );
 }
@@ -407,7 +375,13 @@ function WeekCard({ item, top, onSelect }: { item: Item; top: string; onSelect: 
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const measure = () => setTall(node.getBoundingClientRect().height >= 44);
+    const measure = () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--touch-min").trim();
+      const value = Number.parseFloat(raw);
+      const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const minimum = raw.endsWith("rem") ? value * root : value;
+      setTall(node.getBoundingClientRect().height >= (Number.isFinite(minimum) ? minimum : 44));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -418,26 +392,11 @@ function WeekCard({ item, top, onSelect }: { item: Item; top: string; onSelect: 
       <div className="wevt-fit">
         <div className="meta">
           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
-          <StatusWord status={item.status} />
+          <StatusMark status={item.status} />
         </div>
         <p className="note-sm">{item.preview}</p>
-        {excerpt && tall ? <p className="wevt-excerpt">{excerpt}</p> : null}
+        {excerpt && tall ? <p className="wevt-excerpt literata-preview">{excerpt}</p> : null}
       </div>
     </button>
-  );
-}
-
-function StatusWord({ status }: { status: string }) {
-  if (status === "failed" || status === "missed") {
-    return (
-      <span className={`status-flag status-${status}`} data-testid={`status-${status}`}>
-        {statusWord(status)}
-      </span>
-    );
-  }
-  return (
-    <span className="status" data-testid={`status-${status}`}>
-      {statusWord(status)}
-    </span>
   );
 }

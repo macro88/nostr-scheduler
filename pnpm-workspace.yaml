@@ -1,0 +1,5 @@
+overrides:
+  "@macro88/motion": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz"
+  "@macro88/theme-nostr": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz"
+  "@macro88/tokens": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz"
+  "@macro88/ui": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz"
