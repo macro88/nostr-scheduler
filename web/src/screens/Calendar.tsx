@@ -33,6 +33,16 @@ export function Calendar({ profileId }: { profileId: string }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const confirmingRef = useRef(false);
   confirmingRef.current = confirming;
+  const confirmWasOpen = useRef(false);
+  useEffect(() => {
+    if (confirming) {
+      confirmWasOpen.current = true;
+      return;
+    }
+    if (!confirmWasOpen.current) return;
+    confirmWasOpen.current = false;
+    discardRef.current?.focus();
+  }, [confirming]);
   const surface = usePendingSurface(items.isPending && !items.data);
   const visible = (items.data ?? []).filter(
     (item) => !hidden.includes(item.id) && ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
@@ -311,7 +321,7 @@ export function Calendar({ profileId }: { profileId: string }) {
           </div>
         </div>
       ) : null}
-      {selected ? (
+      {selected && !confirming ? (
         <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
           <p>
             <StatusMark status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
@@ -351,6 +361,7 @@ export function Calendar({ profileId }: { profileId: string }) {
         description="This takes it off the queue. Sign a new note if you still want it sent."
         confirmLabel="Discard"
         cancelLabel="Keep"
+        destructive
         onConfirm={() => discard.mutate()}
       />
     </section>

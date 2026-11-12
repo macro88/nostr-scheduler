@@ -82,7 +82,10 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
     const row = document.querySelector<HTMLElement>(`[data-row='${item.id}']`);
     if (source === "pointer" && !reduced && row) {
       row.classList.add("leaving");
-      window.setTimeout(done, 160);
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--motion-exit-duration").trim();
+      const parsed = Number.parseFloat(raw);
+      const wait = Number.isFinite(parsed) ? (raw.endsWith("ms") || !raw.endsWith("s") ? parsed : parsed * 1000) : 160;
+      window.setTimeout(done, wait);
       return;
     }
     done();

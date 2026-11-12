@@ -11,6 +11,19 @@ import { WorkStore } from "../src/work/store.ts";
 const dataDir = "e2e/run";
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
+async function setScheme(page: Page, scheme: "light" | "dark") {
+  await page.evaluate((value) => {
+    const root = document.documentElement;
+    root.style.setProperty("--motion-duration-fast", "0ms");
+    root.style.setProperty("--motion-duration-base", "0ms");
+    root.dataset.theme = "nostr";
+    root.dataset.scheme = value;
+  }, scheme);
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+  }));
+}
+
 function profileFile(signer: { npub: string; pubkey: string }, relay: string) {
   mkdirSync(`${dataDir}/criteria`, { recursive: true });
   writeFileSync(`${dataDir}/criteria/demo.md`, example.replace("profile_id: example", "profile_id: demo"));
@@ -224,6 +237,17 @@ test("discarding a queued item asks first and escape returns to discard", async 
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Keep" })).toBeFocused();
+  const sheetPaint = await dialog.evaluate((node) => {
+    return [...node.querySelectorAll("button")].map((button) => {
+      const style = getComputedStyle(button);
+      const background = style.backgroundColor;
+      const border = Number.parseFloat(style.borderTopWidth);
+      const filled = background !== "rgba(0, 0, 0, 0)" && background !== "transparent";
+      return { name: button.textContent ?? "", filled, border };
+    });
+  });
+  expect(sheetPaint.length).toBeGreaterThan(0);
+  for (const button of sheetPaint) expect(button.filled || button.border >= 1, button.name).toBe(true);
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "Discard" })).toBeFocused();
   await page.keyboard.press("Escape");
@@ -486,12 +510,25 @@ test("a pasted private key blocks the composer until it is removed", async ({ pa
   await expect(page.getByTestId("save-draft")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeDisabled();
   const faded = await page.getByTestId("save-draft").evaluate((node) => Number(getComputedStyle(node).opacity));
-  expect(faded).toBeLessThan(1);
+    expect(faded).toBeLessThan(1);
   for (const theme of ["light", "dark"] as const) {
-    await page.evaluate((value) => {
-      document.documentElement.dataset.theme = "nostr";
-      document.documentElement.dataset.scheme = value;
-    }, theme);
+    await setScheme(page, theme);
+    const paint = await page.getByTestId("save-draft").evaluate((node) => {
+      if (node instanceof HTMLElement) node.style.transition = "none";
+      const probe = document.createElement("span");
+      document.body.append(probe);
+      const read = (name: string) => {
+        probe.style.color = `var(${name})`;
+        return getComputedStyle(probe).color;
+      };
+      const style = getComputedStyle(node);
+      const accent = read("--color-accent");
+      const onAccent = read("--color-accent-on");
+      probe.remove();
+      return { background: style.backgroundColor, color: style.color, accent, onAccent };
+    });
+    expect(paint.background, theme).toBe(paint.accent);
+    expect(paint.color, theme).toBe(paint.onAccent);
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
     expect(blocking, `${theme}\n${JSON.stringify(blocking, null, 2)}`).toEqual([]);
@@ -511,10 +548,7 @@ test("axe finds no serious or critical issues", async ({ page }) => {
   for (const name of ["inbox", "compose", "calendar", "log", "sign"]) {
     await page.getByTestId(`nav-${name}`).click();
     for (const theme of ["light", "dark"] as const) {
-      await page.evaluate((value) => {
-        document.documentElement.dataset.theme = "nostr";
-      document.documentElement.dataset.scheme = value;
-      }, theme);
+      await setScheme(page, theme);
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
       expect(blocking, `${name} ${theme}\n${JSON.stringify(blocking, null, 2)}`).toEqual([]);
