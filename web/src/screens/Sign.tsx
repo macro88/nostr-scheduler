@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
+import { EmptyState } from "@macro88/ui";
 import { api, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatQueueWhen } from "../format";
@@ -112,7 +113,7 @@ export function Sign({ profile }: { profile: Profile }) {
         <LoadingBlock pending={surface.loading} label="Loading notes to sign" />
         {surface.ready && !items.isError && waiting.length === 0 ? (
           <div data-testid="empty">
-            <p>Nothing is waiting to be signed.</p>
+            <EmptyState title="Nothing is waiting to be signed." />
           </div>
         ) : null}
         <div className="work-list">

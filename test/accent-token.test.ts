@@ -3,7 +3,7 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, test } from "vitest";
 
 const root = new URL("..", import.meta.url).pathname;
-const tokenFile = "web/src/theme/tokens.css";
+const tokenFile = "node_modules/@macro88/theme-nostr/src/theme.css";
 const skipDirs = new Set([
   "node_modules",
   "dist",

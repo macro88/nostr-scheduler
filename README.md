@@ -82,7 +82,13 @@ node src/cli/main.ts disconnect
 
 `pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
 
-The interface is set in Be Vietnam Pro. Notes are set in Literata. Copyable values, such as a bunker link, use IBM Plex Mono. Colour lives in one theme file of semantic tokens. Light is the default. Dark follows the system, and the header can switch it.
+The interface uses the shared Nostr theme from `@macro88/theme-nostr`. UI text is Be Vietnam Pro. Notes are Literata. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document.
+
+## Design system
+
+The screen uses `@macro88/ui` and `@macro88/theme-nostr` at v0.1.0. Those packages are not on npm. `package.json` points at the GitHub release tarballs, and `pnpm-workspace.yaml` overrides every `@macro88` package to the same release so pnpm does not look on npm.
+
+To bump the design system, replace each tarball URL in both files with the new release, then run `pnpm install` and commit the lockfile. The stylesheet order and the `data-theme="nostr"` attribute are described in that release's INSTALL.md.
 
 The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file after a short undo. Compose schedules a note, a thread, or a reply, then clears the editor. The queue shows the week or the day, with the current time marked. An unsigned time can move. A signed time is frozen, and removing a signed or queued item asks you to confirm over the rest of the page.
 

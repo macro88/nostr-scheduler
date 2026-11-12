@@ -1,21 +1,11 @@
-import type { ReactNode } from "react";
+import { InlineError as LibraryInlineError, Skeleton } from "@macro88/ui";
 import { genericChangeError, plainError } from "./errors";
 
 export function LoadingBlock({ pending, label }: { pending: boolean; label: string }) {
   if (!pending) return null;
   return (
-    <div role="status" aria-busy="true" aria-label={label} data-testid="skeleton" className="stack">
-      <div className="skeleton" />
-      <div className="skeleton" />
-    </div>
-  );
-}
-
-export function EmptyState({ title, action }: { title: string; action?: ReactNode }) {
-  return (
-    <div data-testid="empty" className="desk-empty">
-      <p className="empty-title">{title}</p>
-      {action ? <div>{action}</div> : null}
+    <div data-testid="skeleton" className="stack">
+      <Skeleton label={label} />
     </div>
   );
 }
@@ -24,8 +14,8 @@ export function InlineError({ error, fallback }: { error: unknown; fallback?: st
   const plain = plainError(error);
   const message = fallback && plain.message === genericChangeError ? fallback : plain.message;
   return (
-    <div role="alert" data-testid="inline-error" className="error">
-      <p>{message}</p>
+    <div data-testid="inline-error" className="error">
+      <LibraryInlineError>{message}</LibraryInlineError>
       {plain.detail && plain.detail !== message ? (
         <details>
           <summary>Technical detail</summary>

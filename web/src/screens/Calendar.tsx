@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { EmptyState } from "@macro88/ui";
 import { api, type Item } from "../api";
 import { plainError } from "../errors";
 import { weekExcerpt } from "../excerpt";
 import { formatClock, formatQueueWhen, formatWhen, sameLocalDay, startOfWeek } from "../format";
-import { statusWord } from "../labels";
 import { usePendingSurface } from "../pending";
+import { StatusMark } from "../status";
 import { InlineError, LoadingBlock } from "../states";
 import { useToasts } from "../toasts";
 import { WhenField } from "../WhenField";
@@ -209,7 +210,7 @@ export function Calendar({ profileId }: { profileId: string }) {
           <div className="next-up-copy">
             <time>{formatQueueWhen(nextItem.fireAt[0], now)}</time>
             <p>{nextItem.preview}</p>
-            <StatusWord status={nextItem.status} />
+            <StatusMark status={nextItem.status} />
           </div>
           <div className="counts" aria-label="This week">
             <div>
@@ -230,7 +231,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {items.isError ? <InlineError error={items.error} fallback="The queue could not be loaded. Try again." /> : null}
       {surface.ready && !items.isError && visible.length === 0 ? (
         <div data-testid="empty">
-          <p>{mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."}</p>
+          <EmptyState title={mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."} />
         </div>
       ) : null}
       {surface.ready && mode === "week" ? (
@@ -336,7 +337,7 @@ export function Calendar({ profileId }: { profileId: string }) {
                           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                           <p className="note-md">{item.preview}</p>
                           <span className="slot-status">
-                            <StatusWord status={item.status} />
+                            <StatusMark status={item.status} />
                           </span>
                         </button>
                         );
@@ -351,7 +352,7 @@ export function Calendar({ profileId }: { profileId: string }) {
       {selected ? (
         <div ref={detailRef} data-testid="calendar-detail" className="detail-note">
           <p>
-            <StatusWord status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
+            <StatusMark status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
           </p>
           <p className="note-md">{selected.preview}</p>
           {canDiscard ? (
@@ -407,7 +408,11 @@ function WeekCard({ item, top, onSelect }: { item: Item; top: string; onSelect: 
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const measure = () => setTall(node.getBoundingClientRect().height >= 44);
+    const measure = () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--touch-min");
+      const minimum = Number.parseFloat(raw);
+      setTall(node.getBoundingClientRect().height >= (Number.isFinite(minimum) ? minimum : 44));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -418,26 +423,11 @@ function WeekCard({ item, top, onSelect }: { item: Item; top: string; onSelect: 
       <div className="wevt-fit">
         <div className="meta">
           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
-          <StatusWord status={item.status} />
+          <StatusMark status={item.status} />
         </div>
         <p className="note-sm">{item.preview}</p>
-        {excerpt && tall ? <p className="wevt-excerpt">{excerpt}</p> : null}
+        {excerpt && tall ? <p className="wevt-excerpt literata-preview">{excerpt}</p> : null}
       </div>
     </button>
-  );
-}
-
-function StatusWord({ status }: { status: string }) {
-  if (status === "failed" || status === "missed") {
-    return (
-      <span className={`status-flag status-${status}`} data-testid={`status-${status}`}>
-        {statusWord(status)}
-      </span>
-    );
-  }
-  return (
-    <span className="status" data-testid={`status-${status}`}>
-      {statusWord(status)}
-    </span>
   );
 }

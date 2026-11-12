@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { EmptyState } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatWhen } from "../format";
@@ -184,10 +185,14 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
         <div className={`desk${suggestions.length === 0 ? " is-empty" : ""}`}>
           {suggestions.length === 0 ? (
             <div className="desk-empty inbox-list" data-testid="empty">
-              <p className="empty-title">Nothing is waiting.</p>
-              <button type="button" className="btn btn-primary" onClick={onCompose}>
-                Write a note
-              </button>
+              <EmptyState
+                title="Nothing is waiting."
+                action={
+                  <button type="button" className="btn btn-primary" onClick={onCompose}>
+                    Write a note
+                  </button>
+                }
+              />
             </div>
           ) : (
             <div className="inbox-list" role="listbox" aria-label="Suggestions">

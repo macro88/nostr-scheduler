@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
 import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
-import { statusWord } from "../labels";
+import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
 import { useToasts } from "../toasts";
@@ -242,20 +242,13 @@ export function Composer({ profile }: { profile: Profile }) {
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
               <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
               <p className="q-preview note-md">{item.preview}</p>
-              <StatusWord status={item.status} />
+              <StatusMark status={item.status} />
             </article>
           ))}
         </div>
       </aside>
     </div>
   );
-}
-
-function StatusWord({ status }: { status: string }) {
-  if (status === "failed" || status === "missed") {
-    return <span className={`status-flag status-${status}`}>{status === "failed" ? "Failed" : "Missed"}</span>;
-  }
-  return <span className="status">{statusWord(status)}</span>;
 }
 
 function contextTarget(context: string, ref: string): string {

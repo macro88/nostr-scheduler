@@ -500,7 +500,8 @@ test("a pasted private key blocks the composer until it is removed", async ({ pa
   expect(faded).toBeLessThan(1);
   for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => {
-      document.documentElement.dataset.theme = value;
+      document.documentElement.dataset.theme = "nostr";
+      document.documentElement.dataset.scheme = value;
     }, theme);
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
@@ -522,7 +523,8 @@ test("axe finds no serious or critical issues", async ({ page }) => {
     await page.getByTestId(`nav-${name}`).click();
     for (const theme of ["light", "dark"] as const) {
       await page.evaluate((value) => {
-        document.documentElement.dataset.theme = value;
+        document.documentElement.dataset.theme = "nostr";
+      document.documentElement.dataset.scheme = value;
       }, theme);
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");

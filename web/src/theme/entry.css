@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import "@macro88/tokens/theme.css";
+@import "@macro88/motion/tokens.css";
+@import "@macro88/theme-nostr/theme.css";
+@import "@macro88/theme-nostr/motion.css";
+@import "@macro88/ui/styles.css";
+@source "../../../node_modules/@macro88/ui/dist";
