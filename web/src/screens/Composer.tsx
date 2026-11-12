@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, type Item, type Profile } from "../api";
 import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
 import { statusWord } from "../labels";
+import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
 import { useToasts } from "../toasts";
 import { flyScheduleChip, showCheck } from "../theme/motion";
@@ -55,8 +56,10 @@ export function Composer({ profile }: { profile: Profile }) {
   }, [note, reply, parts, kind]);
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
+  const texts = kind === "note" ? [note] : kind === "reply" ? [reply] : parts;
+  const blocked = texts.some((value) => containsPrivateKey(value));
   const draftText = text.trim();
-  const queueRows = draftText
+  const queueRows = draftText && !blocked
     ? [...upcoming, { id: "composer-draft", fireAt: [when], preview: draftText, status: "suggestion" }].sort(
         (left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0),
       )
@@ -67,6 +70,7 @@ export function Composer({ profile }: { profile: Profile }) {
       const fireAt = when;
       if (!Number.isFinite(fireAt) || fireAt <= Math.floor(Date.now() / 1000)) throw new Error("created_at in the past");
       if (fireAt > Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) throw new Error("further ahead than the sign-ahead horizon");
+      if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
       const draft =
         kind === "note"
           ? { type: "note", content: note, proposedFireAt: fireAt }
@@ -95,6 +99,7 @@ export function Composer({ profile }: { profile: Profile }) {
   });
   const keep = useMutation({
     mutationFn: async () => {
+      if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
       const draft = kind === "note" ? { type: "note", content: note, proposedFireAt: when } : { type: "note", content: text, proposedFireAt: when };
       return api("/api/suggestions", { method: "POST", body: JSON.stringify({ profileId: profile.id, rationale: "saved from the composer", draft }) });
     },
@@ -129,10 +134,12 @@ export function Composer({ profile }: { profile: Profile }) {
             className="editor note-lg"
             data-testid="note-text"
             aria-label="Note"
+            aria-describedby={blocked ? "private-key-alert" : undefined}
             placeholder="Write a short note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
             onKeyDown={(event) => {
+              if (blocked) return;
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
             }}
           />
@@ -146,10 +153,12 @@ export function Composer({ profile }: { profile: Profile }) {
                 className="editor note-lg"
                 data-testid="thread-part"
                 aria-label={index === 0 ? "Root post" : "Reply"}
+                aria-describedby={blocked ? "private-key-alert" : undefined}
                 placeholder={index === 0 ? "Root post" : "Reply"}
                 value={part}
                 onChange={(event) => setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
                 onKeyDown={(event) => {
+                  if (blocked) return;
                   if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
                 }}
               />
@@ -182,13 +191,20 @@ export function Composer({ profile }: { profile: Profile }) {
               className="editor note-lg"
               data-testid="reply-text"
               aria-label="Your reply"
+              aria-describedby={blocked ? "private-key-alert" : undefined}
               placeholder="Your reply"
               value={reply}
               onChange={(event) => setReply(event.target.value)}
               onKeyDown={(event) => {
+                if (blocked) return;
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
               }}
             />
+          </div>
+        ) : null}
+        {blocked ? (
+          <div id="private-key-alert" role="alert" data-testid="private-key-alert" className="error">
+            <p>{pasteWarning}</p>
           </div>
         ) : null}
         <div className="composer-foot">
@@ -200,7 +216,7 @@ export function Composer({ profile }: { profile: Profile }) {
           </div>
           {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
           <div className="composer-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => keep.mutate()} disabled={keep.isPending}>
+            <button type="button" className="btn btn-ghost" onClick={() => keep.mutate()} disabled={blocked || keep.isPending}>
               Save without scheduling
             </button>
             <button
@@ -209,7 +225,7 @@ export function Composer({ profile }: { profile: Profile }) {
               data-testid="save-draft"
               title={wide ? "Control or Command and Enter schedules." : undefined}
               onClick={() => save.mutate()}
-              disabled={save.isPending}
+              disabled={blocked || save.isPending}
             >
               Schedule
             </button>

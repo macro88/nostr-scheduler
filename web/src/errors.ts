@@ -1,3 +1,5 @@
+import { pasteWarning } from "../../src/domain/private-key.js";
+
 export type PlainError = {
   message: string;
   detail: string;
@@ -8,6 +10,9 @@ export const genericChangeError = "That change could not be saved. Try again.";
 export function plainError(error: unknown): PlainError {
   const detail = error instanceof Error ? error.message : "The request failed.";
   const text = detail.toLowerCase();
+  if (text.includes("private key") || text.includes("private_key_in_content")) {
+    return { message: pasteWarning, detail: pasteWarning };
+  }
   if (text.includes("past") || text.includes("already passed")) {
     const message = "This time is in the past. Choose a time from now on.";
     return { message, detail: message };
