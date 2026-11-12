@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Button, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
 import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
 import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
-import { useToasts } from "../toasts";
+import { notifySuccess } from "../toasts";
 import { flyScheduleChip, showCheck } from "../theme/motion";
 import { WhenField } from "../WhenField";
 
@@ -13,7 +14,6 @@ type Kind = "note" | "thread" | "reply";
 
 export function Composer({ profile }: { profile: Profile }) {
   const queryClient = useQueryClient();
-  const toasts = useToasts();
   const editor = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<Kind>("note");
   const [when, setWhen] = useState(() => Math.floor(Date.now() / 1000) + 60 * 60);
@@ -91,7 +91,7 @@ export function Composer({ profile }: { profile: Profile }) {
       setReply("");
       setContext("");
       setRef("");
-      toasts.push({ kind: "success", message: `Scheduled for ${formatWhen(when)}.` });
+      notifySuccess(`Scheduled for ${formatWhen(when)}.`);
       void queryClient.invalidateQueries({ queryKey: ["items"] });
       window.setTimeout(() => editor.current?.focus(), 0);
     },
@@ -107,7 +107,7 @@ export function Composer({ profile }: { profile: Profile }) {
       setNote("");
       setParts(["", ""]);
       setReply("");
-      toasts.push({ kind: "success", message: "Saved to the inbox." });
+      notifySuccess("Saved to the inbox.");
       void queryClient.invalidateQueries({ queryKey: ["items"] });
       editor.current?.focus();
     },
@@ -131,7 +131,7 @@ export function Composer({ profile }: { profile: Profile }) {
         {kind === "note" ? (
           <textarea
             ref={editor}
-            className="editor note-lg"
+            className="editor note-lg literata-reading"
             data-testid="note-text"
             aria-label="Note"
             aria-describedby={blocked ? "private-key-alert" : undefined}
@@ -150,7 +150,7 @@ export function Composer({ profile }: { profile: Profile }) {
               <textarea
                 key={index}
                 ref={index === 0 ? editor : undefined}
-                className="editor note-lg"
+                className="editor note-lg literata-reading"
                 data-testid="thread-part"
                 aria-label={index === 0 ? "Root post" : "Reply"}
                 aria-describedby={blocked ? "private-key-alert" : undefined}
@@ -163,24 +163,25 @@ export function Composer({ profile }: { profile: Profile }) {
                 }}
               />
             ))}
-            <button type="button" className="btn btn-outline btn-sm" data-testid="add-part" onClick={() => setParts([...parts, ""])}>
+            <Button type="button" variant="outline" size="sm" data-testid="add-part" onClick={() => setParts([...parts, ""])}>
               Add post
-            </button>
+            </Button>
           </div>
         ) : null}
         {kind === "reply" ? (
           <div>
-            <input className="field" data-testid="note-ref" aria-label="Note id or nevent" placeholder="Note id or nevent" value={ref} onChange={(event) => setRef(event.target.value)} />
-            <button
+            <Input label="Note id or nevent" data-testid="note-ref" placeholder="Note id or nevent" value={ref} onChange={(event) => setRef(event.target.value)} />
+            <Button
               type="button"
-              className="btn btn-outline btn-sm"
+              variant="outline"
+              size="sm"
               data-testid="load-context"
               onClick={() => {
                 void api<{ context: string }>("/api/context", { method: "POST", body: JSON.stringify({ profileId: profile.id, ref }) }).then((body) => setContext(body.context));
               }}
             >
               Load thread
-            </button>
+            </Button>
             {context ? (
               <pre data-testid="thread-context" className="note-md">
                 {context}
@@ -188,7 +189,7 @@ export function Composer({ profile }: { profile: Profile }) {
             ) : null}
             <textarea
               ref={editor}
-              className="editor note-lg"
+              className="editor note-lg literata-reading"
               data-testid="reply-text"
               aria-label="Your reply"
               aria-describedby={blocked ? "private-key-alert" : undefined}
@@ -216,19 +217,19 @@ export function Composer({ profile }: { profile: Profile }) {
           </div>
           {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
           <div className="composer-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => keep.mutate()} disabled={blocked || keep.isPending}>
+            <Button type="button" variant="ghost" onClick={() => keep.mutate()} disabled={blocked || keep.isPending}>
               Save without scheduling
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-primary"
+              variant="primary"
               data-testid="save-draft"
               title={wide ? "Control or Command and Enter schedules." : undefined}
               onClick={() => save.mutate()}
               disabled={blocked || save.isPending}
             >
               Schedule
-            </button>
+            </Button>
           </div>
         </div>
       </section>

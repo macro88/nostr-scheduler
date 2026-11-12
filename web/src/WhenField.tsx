@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@macro88/ui";
 import { formatWhen } from "./format";
 
 type Parts = { day: string; month: string; year: string; hour: string; minute: string };
@@ -154,9 +155,9 @@ export function WhenField({
               {field("year", "Year", "time-year")}
               {field("hour", "Hour", "time-hour")}
               {field("minute", "Minute", "time-minute")}
-              <button type="button" className="btn btn-primary time-apply" data-testid="time-apply" onClick={apply}>
+              <Button type="button" variant="primary" className="time-apply" data-testid="time-apply" onClick={apply}>
                 Use this time
-              </button>
+              </Button>
             </div>,
             document.body,
           )

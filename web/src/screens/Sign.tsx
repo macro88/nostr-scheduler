@@ -1,18 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import { EmptyState } from "@macro88/ui";
+import { Button, EmptyState, Input } from "@macro88/ui";
 import { api, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatQueueWhen } from "../format";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
 import { showCheck } from "../theme/motion";
-import { useToasts } from "../toasts";
+import { notifyError, notifySuccess } from "../toasts";
 
 export function Sign({ profile }: { profile: Profile }) {
   const queryClient = useQueryClient();
-  const toasts = useToasts();
   const items = useQuery({
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
@@ -52,13 +51,13 @@ export function Sign({ profile }: { profile: Profile }) {
       const button = document.querySelector<HTMLElement>("[data-testid='sign-browser']");
       if (button) showCheck(button);
       setStatus(`Queued ${count}`);
-      toasts.push({ kind: "success", message: `Queued ${count}.` });
+      notifySuccess(`Queued ${count}.`);
       void queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
       const plain = plainError(error);
       setStatus(plain.message);
-      toasts.push({ kind: "error", ...plain });
+      notifyError(plain.message);
     },
   });
   const bunker = useMutation({
@@ -70,7 +69,7 @@ export function Sign({ profile }: { profile: Profile }) {
     onError: (error: Error) => {
       const plain = plainError(error);
       setStatus(plain.message);
-      toasts.push({ kind: "error", ...plain });
+      notifyError(plain.message);
     },
   });
   const pair = useMutation({
@@ -82,7 +81,7 @@ export function Sign({ profile }: { profile: Profile }) {
     onError: (error: Error) => {
       const plain = plainError(error);
       setStatus(plain.message);
-      toasts.push({ kind: "error", ...plain });
+      notifyError(plain.message);
     },
   });
   const disconnect = useMutation({
@@ -167,30 +166,30 @@ export function Sign({ profile }: { profile: Profile }) {
             </div>
           ) : null}
           <div className="actions">
-            <button type="button" className="btn btn-primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || chosen.length === 0}>
+            <Button type="button" variant="primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || chosen.length === 0}>
               {chosen.length === 1 ? "Sign note" : chosen.length > 1 ? `Sign ${chosen.length} notes` : "Sign notes"}
-            </button>
-            <button type="button" className="btn btn-outline" data-testid="sign-bunker" onClick={() => bunker.mutate()} disabled={!info.data?.paired || bunker.isPending}>
+            </Button>
+            <Button type="button" variant="outline" data-testid="sign-bunker" onClick={() => bunker.mutate()} disabled={!info.data?.paired || bunker.isPending}>
               Sign with bunker
-            </button>
+            </Button>
           </div>
         </div>
       </div>
       <aside className="bunker-panel">
         <h2>Bunker</h2>
         <p className="support">Pair a remote signer when you do not want to use the browser. The pairing code stays hidden until you need it.</p>
-        <input className="field mono" data-testid="bunker-uri" aria-label="Bunker link" placeholder="bunker://" value={bunkerUri} onChange={(event) => setBunkerUri(event.target.value)} />
+        <Input className="mono" label="Bunker link" data-testid="bunker-uri" placeholder="bunker://" value={bunkerUri} onChange={(event) => setBunkerUri(event.target.value)} />
         <div className="pair-row">
-          <button type="button" className="btn btn-outline btn-sm" data-testid="pair" onClick={() => pair.mutate()} disabled={!bunkerUri.trim() || pair.isPending}>
+          <Button type="button" variant="outline" size="sm" data-testid="pair" onClick={() => pair.mutate()} disabled={!bunkerUri.trim() || pair.isPending}>
             Pair
-          </button>
-          <button type="button" className="btn btn-outline btn-sm" data-testid="disconnect" onClick={() => disconnect.mutate()} disabled={!info.data?.paired || disconnect.isPending}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" data-testid="disconnect" onClick={() => disconnect.mutate()} disabled={!info.data?.paired || disconnect.isPending}>
             Disconnect
-          </button>
+          </Button>
         </div>
-        <button type="button" className="btn btn-ghost" onClick={() => setShowQr((current) => !current)}>
+        <Button type="button" variant="ghost" onClick={() => setShowQr((current) => !current)}>
           {showQr ? "Hide pairing QR" : "Show pairing QR"}
-        </button>
+        </Button>
         {showQr ? (
           <div data-testid="pair-qr" role="img" aria-label="Code for pairing a bunker" dangerouslySetInnerHTML={{ __html: svg.replace("<svg", '<svg aria-hidden="true" focusable="false"') }} />
         ) : null}

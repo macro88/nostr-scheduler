@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { EmptyState } from "@macro88/ui";
+import { Button, EmptyState, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatWhen } from "../format";
@@ -8,11 +8,10 @@ import { singleKeyActive } from "../keys";
 import { kindWord } from "../labels";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
-import { useToasts } from "../toasts";
+import { notifyError, notifySuccess, notifyUndo } from "../toasts";
 
 export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; shortcuts: boolean; onCompose: () => void }) {
   const queryClient = useQueryClient();
-  const toasts = useToasts();
   const items = useQuery({
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
@@ -56,18 +55,18 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
       }),
     onSuccess: () => {
       setEditing(false);
-      toasts.push({ kind: "success", message: "Edit saved." });
+      notifySuccess("Edit saved.");
       void refresh();
     },
-    onError: (error) => toasts.push({ kind: "error", ...plainError(error) }),
+    onError: (error) => notifyError(plainError(error).message),
   });
   const approve = useMutation({
     mutationFn: (id: string) => api(`/api/items/${id}/approve`, { method: "POST", body: "{}" }),
     onSuccess: () => {
-      toasts.push({ kind: "success", message: "Approved." });
+      notifySuccess("Approved.");
       void refresh();
     },
-    onError: (error) => toasts.push({ kind: "error", ...plainError(error) }),
+    onError: (error) => notifyError(plainError(error).message),
   });
   const focusNext = (removedIndex: number) => {
     const next = removedIndex < suggestions.length - 1 ? removedIndex : Math.max(0, suggestions.length - 2);
@@ -95,19 +94,18 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
       setReason("");
       setRejecting(false);
       focusNext(removed);
-      toasts.push({
-        kind: "undo",
-        message: "Suggestion rejected.",
-        onUndo: () => setHidden((current) => current.filter((id) => id !== item.id)),
-        onExpire: () => {
+      notifyUndo(
+        "Suggestion rejected.",
+        () => setHidden((current) => current.filter((id) => id !== item.id)),
+        () => {
           void api(`/api/items/${item.id}/reject`, { method: "POST", body: JSON.stringify({ reason: note }) })
             .then(() => refresh())
             .catch((error) => {
               setHidden((current) => current.filter((id) => id !== item.id));
-              toasts.push({ kind: "error", ...plainError(error) });
+              notifyError(plainError(error).message);
             });
         },
-      });
+      );
     });
   };
   const approveRow = (item: Item, source: "keyboard" | "pointer") => {
@@ -117,12 +115,12 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
       focusNext(removed);
       void api(`/api/items/${item.id}/approve`, { method: "POST", body: "{}" })
         .then(() => {
-          toasts.push({ kind: "success", message: "Approved." });
+          notifySuccess("Approved.");
           void refresh();
         })
         .catch((error) => {
           setHidden((current) => current.filter((id) => id !== item.id));
-          toasts.push({ kind: "error", ...plainError(error) });
+          notifyError(plainError(error).message);
         });
     });
   };
@@ -188,9 +186,9 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
               <EmptyState
                 title="Nothing is waiting."
                 action={
-                  <button type="button" className="btn btn-primary" onClick={onCompose}>
+                  <Button type="button" variant="primary" onClick={onCompose}>
                     Write a note
-                  </button>
+                  </Button>
                 }
               />
             </div>
@@ -237,24 +235,23 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
                   <p className="rationale">{selected.rationale.startsWith("Suggested because") ? selected.rationale : `Suggested because ${selected.rationale}`}</p>
                 ) : null}
                 <div className="actions">
-                  <button type="button" className="btn btn-primary" data-testid="approve" onClick={() => approveRow(selected, "pointer")} disabled={approve.isPending}>
+                  <Button type="button" variant="primary" data-testid="approve" onClick={() => approveRow(selected, "pointer")} disabled={approve.isPending}>
                     Approve
-                  </button>
+                  </Button>
                   {editing ? (
-                    <button type="button" className="btn btn-outline" data-testid="save-edit" onClick={() => edit.mutate()} disabled={edit.isPending}>
+                    <Button type="button" variant="outline" data-testid="save-edit" onClick={() => edit.mutate()} disabled={edit.isPending}>
                       Save edit
-                    </button>
+                    </Button>
                   ) : (
-                    <button type="button" className="btn btn-outline" data-testid="edit" onClick={() => setEditing(true)}>
+                    <Button type="button" variant="outline" data-testid="edit" onClick={() => setEditing(true)}>
                       Edit
-                    </button>
+                    </Button>
                   )}
                   {rejecting ? (
                     <>
-                      <input
-                        className="field"
+                      <Input
+                        label="Reason for rejecting"
                         data-testid="reject-reason"
-                        aria-label="Reason for rejecting"
                         placeholder="Reason for rejecting"
                         value={reason}
                         onChange={(event) => setReason(event.target.value)}
@@ -262,14 +259,14 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
                           if (event.key === "Enter" && reason.trim()) queueReject(selected, reason.trim(), "keyboard");
                         }}
                       />
-                      <button type="button" className="btn btn-ghost" data-testid="reject" onClick={() => queueReject(selected, reason.trim(), "pointer")} disabled={!reason.trim()}>
+                      <Button type="button" variant="ghost" data-testid="reject" onClick={() => queueReject(selected, reason.trim(), "pointer")} disabled={!reason.trim()}>
                         Reject
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <button type="button" className="btn btn-ghost" data-testid="reject-open" onClick={() => setRejecting(true)}>
+                    <Button type="button" variant="ghost" data-testid="reject-open" onClick={() => setRejecting(true)}>
                       Reject…
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {edit.error || approve.error ? <InlineError error={edit.error ?? approve.error} /> : null}

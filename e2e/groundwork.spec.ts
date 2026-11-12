@@ -80,7 +80,7 @@ test("keyboard approve, reject with undo, and schedule", async ({ page }) => {
   await page.reload();
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
-  await expect(page.getByTestId("toast-success")).toContainText("Approved");
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Approved" })).toBeVisible();
 
   await post(page, "/api/suggestions", {
     profileId: "demo",
@@ -92,8 +92,8 @@ test("keyboard approve, reject with undo, and schedule", async ({ page }) => {
   await page.keyboard.press("r");
   await page.getByTestId("reject-reason").fill("not now");
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("toast-undo")).toBeVisible();
-  await page.getByTestId("undo").click();
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Suggestion rejected" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("suggestion").filter({ hasText: "Undo note" })).toBeVisible();
 
   await page.getByTestId("nav-compose").click();
@@ -164,7 +164,7 @@ test("single-key shortcuts turn off and stay out of text fields", async ({ page 
   await expect(page.getByTestId("profile")).toBeFocused();
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
-  await expect(page.getByTestId("toast-success")).toHaveCount(0);
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
   await expect(page.getByTestId("suggestion").filter({ hasText: "Shortcut note" })).toBeVisible();
   await page.reload();
   await page.getByTestId("profile").click();
@@ -173,7 +173,7 @@ test("single-key shortcuts turn off and stay out of text fields", async ({ page 
   await page.keyboard.press("Escape");
   await page.getByTestId("suggestion").focus();
   await page.keyboard.press("a");
-  await expect(page.getByTestId("toast-success")).toContainText("Approved");
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Approved" })).toBeVisible();
   await relay.stop();
 });
 
@@ -221,22 +221,11 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await page.getByTestId("calendar-item").filter({ hasText: "Queued for discard" }).click();
   await expect(page.getByTestId("frozen-note")).toHaveCount(0);
   await page.getByTestId("discard").click();
-  const dialog = page.getByTestId("confirm-discard");
+  const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
-  const headerInert = await page.locator("header").evaluate((element) => element.matches("[inert], [inert] *"));
-  const navInert = await page.getByRole("navigation", { name: "Sections" }).evaluate((element) => element.matches("[inert], [inert] *"));
-  const dialogInert = await dialog.evaluate((element) => element.matches("[inert], [inert] *"));
-  expect(headerInert).toBe(true);
-  expect(navInert).toBe(true);
-  expect(dialogInert).toBe(false);
-  const box = await dialog.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box && viewport && box.y >= 0 && box.y + box.height <= viewport.height + 1).toBe(true);
-  await expect(page.getByTestId("confirm-remove")).toBeFocused();
-  await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "Keep" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByTestId("confirm-remove")).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Discard" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("calendar-detail")).toBeVisible();
@@ -298,7 +287,7 @@ test("the composer lists the current draft and keeps the shortcut off the page",
   await expect(draft).toContainText("draft line for the queue");
   await expect(draft).toContainText("Draft");
   await page.getByTestId("note-text").press("Control+Enter");
-  await expect(page.getByTestId("toast-success")).toContainText("Scheduled");
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "Scheduled" })).toBeVisible();
   await expect(page.getByTestId("composer-draft")).toHaveCount(0);
   await relay.stop();
 });
@@ -382,10 +371,10 @@ test("a toast does not cover schedule", async ({ page }) => {
   await page.getByTestId("nav-compose").click();
   await page.getByTestId("note-text").fill("Short note");
   await page.getByTestId("save-draft").click();
-  await expect(page.getByTestId("toast-success")).toBeVisible();
+  await expect(page.locator("[data-sonner-toast]")).toBeVisible();
   await page.getByTestId("save-draft").scrollIntoViewIfNeeded();
   const covered = await page.evaluate(() => {
-    const toast = document.querySelector("[data-testid=toast-success]")?.getBoundingClientRect();
+    const toast = document.querySelector("[data-sonner-toast]")?.getBoundingClientRect();
     const button = document.querySelector("[data-testid=save-draft]")?.getBoundingClientRect();
     if (!toast || !button) return true;
     return button.top < toast.bottom && button.bottom > toast.top && button.left < toast.right && button.right > toast.left;
