@@ -7,6 +7,7 @@ import {
   assertSamePayload,
 } from "../domain/event.ts";
 import { assertWithinSignHorizon } from "../domain/horizon.ts";
+import { assertNoPrivateKey } from "../domain/private-key.ts";
 import { markSigned } from "../domain/transitions.ts";
 import type { Approved, SignedEvent, SignedWork, Signer } from "../domain/types.ts";
 
@@ -24,6 +25,7 @@ export async function signApproved(args: {
   maxAheadSeconds: number;
   relayHint: RelayUrl;
 }): Promise<SignedWork> {
+  assertNoPrivateKey(args.item.draft);
   const check = (createdAt: UnixSeconds) =>
     assertWithinSignHorizon({ now: args.now, createdAt, maxAheadSeconds: args.maxAheadSeconds });
   const events: SignedEvent[] = [];

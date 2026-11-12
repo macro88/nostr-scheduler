@@ -17,6 +17,7 @@ import {
 } from "../domain/brand.ts";
 import { parseDraft } from "../domain/draft.ts";
 import { eventsMatch, parseSignedEvent } from "../domain/event.ts";
+import { containsPrivateKey, assertNoPrivateKey, PrivateKeyInContentError } from "../domain/private-key.ts";
 import { applyCommand, type WorkCommand } from "../domain/transitions.ts";
 import type {
   Draft,
@@ -185,6 +186,7 @@ export class WorkStore {
     if (args.suggesterId !== args.profile.suggesterId) {
       throw new Error("this profile has a different suggester");
     }
+    assertNoPrivateKey(args.draft);
     const item: Suggestion = {
       status: "suggestion",
       id: args.id ?? suggestionId(`sug_${randomBytes(8).toString("hex")}`),
@@ -212,6 +214,10 @@ export class WorkStore {
   }
 
   transition(id: SuggestionId, command: WorkCommand, at: UnixSeconds, profile?: Profile): WorkItem {
+    if (command.type === "edit") assertNoPrivateKey(command.draft);
+    if (command.type === "sign" && command.events.some((event) => containsPrivateKey(event.content))) {
+      throw new PrivateKeyInContentError();
+    }
     const current = this.get(id);
     const next = applyCommand(current, command, at);
     const before = signedEventsOf(current);

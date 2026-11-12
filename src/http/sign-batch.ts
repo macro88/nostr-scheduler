@@ -9,6 +9,7 @@ import {
 } from "../domain/event.ts";
 import { assertWithinSignHorizon } from "../domain/horizon.ts";
 import { signAheadSeconds } from "../domain/defaults.ts";
+import { assertNoPrivateKey } from "../domain/private-key.ts";
 import type { Approved, Profile, SignedEvent, UnsignedEvent, WorkItem } from "../domain/types.ts";
 
 export type SignCursor = {
@@ -27,6 +28,7 @@ export function nextUnsigned(args: {
   signedSoFar: readonly SignedEvent[];
   now: UnixSeconds;
 }): UnsignedEvent | null {
+  assertNoPrivateKey(args.item.draft);
   const relayHint = args.profile.relays.configured[0];
   const check = (createdAt: UnixSeconds) =>
     assertWithinSignHorizon({ now: args.now, createdAt, maxAheadSeconds: signAheadSeconds() });

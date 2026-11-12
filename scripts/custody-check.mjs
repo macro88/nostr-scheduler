@@ -1,12 +1,15 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { pasteWarning } from "../src/domain/private-key.ts";
 
 const root = new URL("..", import.meta.url).pathname;
 
 const skipFile = new Set(["src/mock-signer/index.ts"]);
 
 const sessionFile = "src/signers/nip46-session.ts";
+
+const fixture = "nsec1notarealkeyxxxxxxxx";
 
 const patterns = [
   { name: "nsec", re: /nsec/i, session: false },
@@ -25,16 +28,27 @@ const patterns = [
 export function scanText(rel, text) {
   if (skipFile.has(rel)) return [];
   const hits = [];
+  let body = text.split(pasteWarning).join("");
+  if (rel.startsWith("test/") || rel.startsWith("e2e/")) body = body.split(fixture).join("");
+  if (rel === "src/domain/private-key.ts") body = body.replace(/\/nsec1\/i/g, "");
   for (const pattern of patterns) {
-    if (!pattern.re.test(text)) continue;
+    if (!pattern.re.test(body)) continue;
     if (rel === sessionFile && pattern.session) continue;
     hits.push(pattern.name);
+  }
+  if (!rel.startsWith("test/") && !rel.startsWith("e2e/")) {
+    for (const line of text.split("\n")) {
+      if (/nsec1/i.test(line) && /(console\.|writeFile|appendFile|remember\(|insert\()/.test(line)) {
+        hits.push("persisted-marker");
+      }
+    }
   }
   return hits;
 }
 
 function walk(dir, out) {
   for (const name of readdirSync(dir)) {
+    if (name === "dist" || name === "node_modules" || name === "coverage") continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
       walk(path, out);

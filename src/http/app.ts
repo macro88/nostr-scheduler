@@ -6,6 +6,7 @@ import { streamSSE } from "hono/streaming";
 import { suggestionId } from "../domain/brand.ts";
 import { parseDraft } from "../domain/draft.ts";
 import { signAheadSeconds } from "../domain/defaults.ts";
+import { PrivateKeyInContentError } from "../domain/private-key.ts";
 import { systemNow } from "../signers/batch.ts";
 import { connectBunker } from "../signers/nip46.ts";
 import { loadOrCreateSession, wipeSession, type SessionLoadOptions } from "../signers/nip46-session.ts";
@@ -96,7 +97,10 @@ export function createApp(options: AppOptions) {
   };
   const app = new Hono();
   app.use("*", guard.middleware);
-  app.onError((error, c) => c.json({ error: error.message }, 400));
+  app.onError((error, c) => {
+    if (error instanceof PrivateKeyInContentError) return c.json({ error: error.message, code: error.code }, 400);
+    return c.json({ error: error.message }, 400);
+  });
 
   app.get("/api/session", (c) => c.json({ token: issueSession(c, guard.sessions) }));
   app.get("/api/events", (c) =>

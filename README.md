@@ -129,8 +129,16 @@ These are the v1 defaults. They are also listed in `DEFAULTS.md`.
 - Test and demo modes refuse any relay that is not on the loopback interface.
 - Thread fire times must increase. Replies are signed after the root, because the root id has to exist first. The publisher sends the root first.
 
+## Private key paste guard
+
+If a note's text contains `nsec1` anywhere, in any case, the composer will not queue it. The same check refuses a draft, a suggestion, or an edit at the API, refuses `suggest_post`, and refuses to ask the signer. A thread is blocked when any post matches, including text inside a URL or another word. The marker does not have to be a valid key. The warning tells you to remove it and never repeats the pasted text.
+
 ## MCP
 
 Start `node src/cli/main.ts mcp` and point a local MCP client at that process over standard input. A suggester can list profiles, read criteria and the decision log, read thread context, submit a suggestion, and inspect the queue. It cannot sign or publish.
 
 `suggest_post` stores a suggestion. The suggester id has to match the one on the profile.
+
+## Future work
+
+If retracting a sent note is ever added, the UI calls it a deletion request.

@@ -5,6 +5,7 @@ import { suggestionId, unixSeconds } from "../src/domain/brand.ts";
 import { noteUnsigned } from "../src/domain/event.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
+import { pasteWarning } from "../src/domain/private-key.ts";
 import { WorkStore } from "../src/work/store.ts";
 
 const dataDir = "e2e/run";
@@ -196,7 +197,15 @@ test("discarding a queued item asks first and escape returns to discard", async 
   });
   await page.goto("/");
   await clear(page);
-  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  const fire = new Date();
+  if (fire.getHours() >= 18) {
+    fire.setDate(fire.getDate() + 1);
+    fire.setHours(12, 15, 0, 0);
+  } else {
+    fire.setHours(Math.max(fire.getHours() + 1, 9), 15, 0, 0);
+  }
+  const rollsForward = fire.getDate() !== new Date().getDate();
+  const fireAt = Math.floor(fire.getTime() / 1000);
   await post(page, "/api/compose", {
     profileId: "demo",
     draft: { type: "note", content: "Queued for discard", proposedFireAt: fireAt },
@@ -206,6 +215,7 @@ test("discarding a queued item asks first and escape returns to discard", async 
   await expect(page.getByTestId("sign-status")).toContainText("Queued");
   await page.getByTestId("nav-calendar").click();
   await page.getByTestId("view-day").click();
+  if (rollsForward) await page.getByRole("button", { name: "Next" }).click();
   const noteAlign = await page.locator(".slot-item p").first().evaluate((node) => getComputedStyle(node).textAlign);
   expect(["start", "left"]).toContain(noteAlign);
   await page.getByTestId("calendar-item").filter({ hasText: "Queued for discard" }).click();
@@ -469,6 +479,37 @@ test("the page does not load a forbidden typeface", async ({ page }) => {
   });
   expect(families).toContain("Be Vietnam Pro");
   expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto/i);
+  await relay.stop();
+});
+
+test("a pasted private key blocks the composer until it is removed", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
+  await page.goto("/");
+  await clear(page);
+  await page.getByTestId("nav-compose").click();
+  const pasted = "nsec1notarealkeyxxxxxxxx";
+  await page.getByTestId("note-text").fill(`see ${pasted} in the note`);
+  const alert = page.getByTestId("private-key-alert");
+  await expect(alert).toHaveText(pasteWarning);
+  await expect(page.getByTestId("note-text")).toHaveAttribute("aria-describedby", "private-key-alert");
+  await expect(page.getByTestId("save-draft")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeDisabled();
+  const faded = await page.getByTestId("save-draft").evaluate((node) => Number(getComputedStyle(node).opacity));
+  expect(faded).toBeLessThan(1);
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const results = await new AxeBuilder({ page }).analyze();
+    const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
+    expect(blocking, `${theme}\n${JSON.stringify(blocking, null, 2)}`).toEqual([]);
+  }
+  await page.getByTestId("note-text").fill("a clean note");
+  await expect(alert).toHaveCount(0);
+  await expect(page.getByTestId("save-draft")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeEnabled();
   await relay.stop();
 });
 
