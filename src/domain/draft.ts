@@ -1,4 +1,5 @@
 import { eventId, hexPubkey, InputError, relayUrl, unixSeconds, type UnixSeconds } from "./brand.ts";
+import { assertNoPrivateKey } from "./private-key.ts";
 import type { Draft, ReplyTarget, ThreadSegment } from "./types.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,7 +49,9 @@ function targetOf(value: unknown): ReplyTarget {
 export function parseDraft(value: unknown): Draft {
   if (!isRecord(value) || typeof value.type !== "string") throw new InputError("draft", "expected a typed draft");
   if (value.type === "note") {
-    return { type: "note", content: contentOf(value.content), proposedFireAt: timeOf(value.proposedFireAt, "proposed_fire_at") };
+    const draft: Draft = { type: "note", content: contentOf(value.content), proposedFireAt: timeOf(value.proposedFireAt, "proposed_fire_at") };
+    assertNoPrivateKey(draft);
+    return draft;
   }
   if (value.type === "thread") {
     if (!Array.isArray(value.segments) || value.segments.length < 2) {
@@ -58,17 +61,21 @@ export function parseDraft(value: unknown): Draft {
     if (first === undefined || second === undefined) {
       throw new InputError("segments", "a thread needs a root and at least one reply");
     }
-    return { type: "thread", segments: [first, second, ...rest] };
+    const draft: Draft = { type: "thread", segments: [first, second, ...rest] };
+    assertNoPrivateKey(draft);
+    return draft;
   }
   if (value.type === "reply") {
     const parent = parentOf(value.parent);
-    return {
+    const draft: Draft = {
       type: "reply",
       content: contentOf(value.content),
       proposedFireAt: timeOf(value.proposedFireAt, "proposed_fire_at"),
       target: targetOf(value.target),
       ...(parent ? { parent } : {}),
     };
+    assertNoPrivateKey(draft);
+    return draft;
   }
   throw new InputError("type", "expected note, thread, or reply");
 }
