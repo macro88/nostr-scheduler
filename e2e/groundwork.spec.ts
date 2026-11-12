@@ -496,6 +496,8 @@ test("a pasted private key blocks the composer until it is removed", async ({ pa
   await expect(page.getByTestId("note-text")).toHaveAttribute("aria-describedby", "private-key-alert");
   await expect(page.getByTestId("save-draft")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeDisabled();
+  const faded = await page.getByTestId("save-draft").evaluate((node) => Number(getComputedStyle(node).opacity));
+  expect(faded).toBeLessThan(1);
   for (const theme of ["light", "dark"] as const) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;

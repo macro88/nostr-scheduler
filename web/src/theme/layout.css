@@ -189,7 +189,7 @@ h2 {
 }
 .btn-primary:disabled,
 .btn-primary.is-disabled {
-  opacity: 1;
+  opacity: 0.45;
   background: var(--color-accent);
   color: var(--color-accent-on);
   box-shadow: none;
