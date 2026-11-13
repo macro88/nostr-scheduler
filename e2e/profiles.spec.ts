@@ -4,8 +4,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
 
-const shotDir = "/opt/cursor/artifacts/profile-setup";
 const fixture = "nsec1notarealkeyxxxxxxxx";
+
+function screenshotDir(): string | undefined {
+  const dir = process.env.SCREENSHOT_DIR?.trim();
+  if (!dir) return undefined;
+  return dir;
+}
 
 async function setScheme(page: Page, scheme: "light" | "dark") {
   await page.evaluate((value) => {
@@ -21,6 +26,8 @@ async function setScheme(page: Page, scheme: "light" | "dark") {
 }
 
 async function shots(page: Page, name: string) {
+  const shotDir = screenshotDir();
+  if (!shotDir) return;
   mkdirSync(shotDir, { recursive: true });
   for (const theme of ["light", "dark"] as const) {
     await setScheme(page, theme);
@@ -119,6 +126,13 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await shots(page, "bunker-revealed");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
   await expect(page.getByRole("radio", { name: "Browser signer (NIP-07)" })).toBeFocused();
+  await expect(page.getByTestId("nip65-switch")).not.toBeChecked();
+  await shots(page, "nip65-off");
+  await page.getByTestId("nip65-switch").click();
+  await expect(page.getByTestId("nip65-switch")).toBeChecked();
+  await shots(page, "nip65-on");
+  await page.getByTestId("nip65-switch").click();
+  await expect(page.getByTestId("nip65-switch")).not.toBeChecked();
 
   await page.getByTestId("public-switch").click();
   await expect(page.getByTestId("public-switch")).not.toBeChecked();
@@ -230,6 +244,8 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await shots(page, "remove-notes");
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
   await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+  await shots(page, "first-run-return");
 
   await page.getByLabel("Label").fill("Other");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
