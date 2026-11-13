@@ -146,7 +146,7 @@ A second run is safe. It clears the demo directory and produces a new event id.
 pnpm relay:local
 ```
 
-The process prints `relay ws://127.0.0.1:7777`. Put that URL in the profile's relay list in `data/profiles.yaml`.
+The process prints `relay ws://127.0.0.1:7777`. Add that URL under Relays on the profile setup page.
 
 ```yaml
     relays:
