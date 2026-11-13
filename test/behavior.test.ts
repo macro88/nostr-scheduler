@@ -141,6 +141,8 @@ describe("inbox and signing", () => {
     const feedback = readFeedback(feedbackPath(profile.criteriaPath, profile.id));
     expect(feedback.map((entry) => entry.action)).toEqual(["edited", "approved", "rejected"]);
     if (approved.status !== "approved") return;
+    const relay = profile.relays.configured[0];
+    if (!relay) throw new Error("fixture relay");
     const signed = await signApproved({
       signer,
       item: approved,
@@ -152,7 +154,7 @@ describe("inbox and signing", () => {
     expect(signed.events[0]?.created_at).toBe(unixSeconds(now + 30));
     const thread = threadPlanFromDraft({
       pubkey: signer.pubkey,
-      relayHint: profile.relays.configured[0],
+      relayHint: relay,
       draft: {
         type: "thread",
         segments: [
@@ -171,7 +173,7 @@ describe("inbox and signing", () => {
     expect(() =>
       threadPlanFromDraft({
         pubkey: signer.pubkey,
-        relayHint: profile.relays.configured[0],
+        relayHint: relay,
         draft: { type: "thread", segments: [{ content: "only", proposedFireAt: now }, { content: "same", proposedFireAt: now }] },
       }),
     ).toThrow(/increase/);

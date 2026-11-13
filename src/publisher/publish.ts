@@ -1,7 +1,7 @@
 import { nonEmpty, unixSeconds, type UnixSeconds } from "../domain/brand.ts";
 import { decideCatchUp } from "../domain/catchup.ts";
 import { parseRawEvent } from "../domain/event.ts";
-import { mergeWriteRelays, relayListFromTags } from "../domain/relays.ts";
+import { classifyPublishRelay, mergeWriteRelays, relayListFromTags } from "../domain/relays.ts";
 import type { PerRelayResult, Profile, Queued, RelayUrl, SignedEvent } from "../domain/types.ts";
 import { fetchFromRelay } from "../test-relay/client.ts";
 import { WorkStore } from "../work/store.ts";
@@ -149,15 +149,26 @@ export function virtualClock(start: number): { now: () => UnixSeconds; advance: 
   };
 }
 
+function usableRelays(urls: readonly string[], allowPublicRelays: boolean): RelayUrl[] {
+  const usable: RelayUrl[] = [];
+  for (const url of urls) {
+    const decision = classifyPublishRelay(url, allowPublicRelays);
+    if (decision.publish) usable.push(decision.url);
+  }
+  return usable;
+}
+
 async function targetRelays(profile: Profile): Promise<readonly RelayUrl[]> {
   if (!profile.relays.readNip65) return profile.relays.configured;
+  const first = profile.relays.configured[0];
+  if (!first) return profile.relays.configured;
   try {
-    const first = profile.relays.configured[0];
     const rows = await fetchFromRelay(first, { authors: [profile.pubkey], kinds: [10002], limit: 1 });
     const raw = parseRawEvent(rows[0]);
     if (raw.kind !== 10002) return profile.relays.configured;
     const merged = mergeWriteRelays(profile.relays.configured, relayListFromTags(raw.tags), true);
-    return merged.length > 0 ? merged : profile.relays.configured;
+    const allowed = usableRelays(merged, profile.relays.allowPublicRelays);
+    return allowed.length > 0 ? allowed : profile.relays.configured;
   } catch {
     return profile.relays.configured;
   }

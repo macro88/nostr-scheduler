@@ -1,10 +1,24 @@
 import type { Unsigned } from "./nostr";
 
+export type ProfileRelay = {
+  url: string;
+  publish: boolean;
+  flagged: boolean;
+  public: boolean;
+};
+
 export type Profile = {
   id: string;
   label: string;
   pubkey: string;
+  npub?: string;
   signer: { kind: string; bunkerUri?: string; bindHost?: string; platform?: string };
+  criteriaPath?: string;
+  criteriaExists?: boolean;
+  readNip65?: boolean;
+  allowPublicRelays?: boolean;
+  relays?: ProfileRelay[];
+  queuedOrSigned?: number;
 };
 
 export type Item = {

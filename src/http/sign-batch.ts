@@ -1,4 +1,4 @@
-import { unixSeconds, type UnixSeconds } from "../domain/brand.ts";
+import { InputError, unixSeconds, type UnixSeconds } from "../domain/brand.ts";
 import {
   assertSamePayload,
   nextThreadUnsigned,
@@ -30,6 +30,7 @@ export function nextUnsigned(args: {
 }): UnsignedEvent | null {
   assertNoPrivateKey(args.item.draft);
   const relayHint = args.profile.relays.configured[0];
+  if (args.item.draft.type !== "note" && !relayHint) throw new InputError("relays", "add a relay before signing");
   const check = (createdAt: UnixSeconds) =>
     assertWithinSignHorizon({ now: args.now, createdAt, maxAheadSeconds: signAheadSeconds() });
   if (args.item.draft.type === "note") {
@@ -44,10 +45,12 @@ export function nextUnsigned(args: {
   }
   if (args.item.draft.type === "reply") {
     if (args.signedSoFar.length > 0) return null;
+    if (!relayHint) throw new InputError("relays", "add a relay before signing");
     const unsigned = replyUnsigned({ pubkey: args.profile.pubkey, draft: args.item.draft, relayHint });
     check(unsigned.created_at);
     return unsigned;
   }
+  if (!relayHint) throw new InputError("relays", "add a relay before signing");
   const plan = threadPlanFromDraft({ pubkey: args.profile.pubkey, draft: args.item.draft, relayHint });
   if (args.signedSoFar.length === 0) {
     check(plan.root.created_at);

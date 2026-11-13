@@ -1,17 +1,29 @@
+import { InputError, relayUrl, type RelayUrl } from "./brand.ts";
 import { runtimeMode } from "../mode.ts";
-import { relayUrl, type RelayUrl } from "./brand.ts";
-import type { EventTag } from "./types.ts";
+import type { EventTag, ListedRelay } from "./types.ts";
 
 export function isLoopbackRelay(value: string): boolean {
   try {
     const url = new URL(value);
     return (
       (url.protocol === "ws:" || url.protocol === "wss:") &&
-      (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1")
+      ["127.0.0.1", "localhost", "::1"].includes(url.hostname.replace(/^\[|\]$/g, ""))
     );
   } catch {
     return false;
   }
+}
+
+export function classifyPublishRelay(rawUrl: string, allowPublicRelays: boolean): ListedRelay {
+  let url: RelayUrl;
+  try {
+    url = relayUrl(rawUrl);
+  } catch {
+    throw new InputError("relay", "Relay addresses start with ws:// or wss://.");
+  }
+  if (isLoopbackRelay(url)) return { url, publish: true, flagged: false, public: false };
+  if (allowPublicRelays) return { url, publish: true, flagged: false, public: true };
+  return { url, publish: false, flagged: true, public: true };
 }
 
 export function assertRelayAllowed(url: RelayUrl, env: NodeJS.ProcessEnv = process.env): void {

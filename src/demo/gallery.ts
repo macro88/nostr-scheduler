@@ -1,7 +1,7 @@
 import { suggestionId, type UnixSeconds } from "../domain/brand.ts";
 import { parseDraft } from "../domain/draft.ts";
 import { noteUnsigned } from "../domain/event.ts";
-import type { Draft, Profile, Signer } from "../domain/types.ts";
+import type { Draft, Profile, RelayUrl, Signer } from "../domain/types.ts";
 import type { WorkStore } from "../work/store.ts";
 
 const EVENT = "11".repeat(32);
@@ -57,6 +57,7 @@ export async function seedGallery(args: {
 }): Promise<void> {
   const monday = mondayOf(new Date(args.now * 1000));
   const relay = args.profile.relays.configured[0];
+  if (!relay) throw new Error("profile has no publish relay");
   const parentAt = at(monday, 2, 8, 41);
   const inbox: { id: string; draft: Draft }[] = [
     { id: "sug_in01", draft: reply(
@@ -116,7 +117,7 @@ async function place(
   args: { store: WorkStore; profile: Profile; signer: Signer; now: UnixSeconds },
   draft: Draft,
   kind: Kind,
-  relay: Profile["relays"]["configured"][number],
+  relay: RelayUrl,
   id: string,
 ): Promise<void> {
   const item = args.store.suggest({

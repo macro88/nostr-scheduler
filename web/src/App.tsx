@@ -7,6 +7,8 @@ import { Calendar } from "./screens/Calendar";
 import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
 import { Log } from "./screens/Log";
+import { ProfileForm } from "./screens/ProfileForm";
+import { ProfileSettings } from "./screens/ProfileSettings";
 import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
 import { Toaster } from "./toasts";
@@ -22,6 +24,7 @@ export function App() {
   const [view, setView] = useState<View>("inbox");
   const [shortcuts, setShortcuts] = useState(() => readShortcutsEnabled(typeof localStorage === "undefined" ? null : localStorage));
   const [menuOpen, setMenuOpen] = useState(false);
+  const [manage, setManage] = useState(false);
   const profileButton = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const firstView = useRef(true);
@@ -109,6 +112,30 @@ export function App() {
     };
   }, [menuOpen]);
 
+  const ready = Boolean(profiles.data && profiles.data.length > 0);
+  if (!profiles.isPending && !ready) {
+    return (
+      <>
+        <Toaster />
+        <header>
+          <div className="brand-nav">
+            <span className="wordmark">Scheduler</span>
+          </div>
+        </header>
+        <main>
+          <ProfileForm
+            mode="create"
+            onSaved={(id) => {
+              setProfileId(id);
+              setView("compose");
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+            }}
+          />
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <Toaster />
@@ -162,6 +189,9 @@ export function App() {
                   </button>
                 ))}
               </div>
+              <button type="button" data-testid="manage-profiles" onClick={() => { setManage(true); setMenuOpen(false); }}>
+                Manage profiles
+              </button>
               <p className="menu-label" id="theme-label">Theme</p>
               <div role="radiogroup" aria-labelledby="theme-label">
                 {(["system", "light", "dark"] as const).map((choice) => (
@@ -195,12 +225,28 @@ export function App() {
         </div>
       </header>
       <main>
-        {!selected && !profiles.isPending ? <p>Add a profile in the data directory to begin.</p> : null}
-        {selected && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
-        {selected && view === "compose" ? <Composer profile={selected} /> : null}
-        {selected && view === "calendar" ? <Calendar profileId={selected.id} /> : null}
-        {selected && view === "log" ? <Log /> : null}
-        {selected && view === "sign" ? <Sign profile={selected} /> : null}
+        {selected && manage ? (
+          <ProfileSettings
+            profiles={profiles.data ?? []}
+            currentId={selected.id}
+            onSaved={(id) => {
+              setProfileId(id);
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+            }}
+            onRemoved={() => {
+              setManage(false);
+              setProfileId("");
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+            }}
+          />
+        ) : null}
+        {selected && !manage && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
+        {selected && !manage && view === "compose" ? <Composer profile={selected} /> : null}
+        {selected && !manage && view === "calendar" ? (
+          <Calendar profileId={selected.id} canSend={(selected.relays ?? []).some((item) => item.publish)} />
+        ) : null}
+        {selected && !manage && view === "log" ? <Log /> : null}
+        {selected && !manage && view === "sign" ? <Sign profile={selected} /> : null}
       </main>
     </>
   );

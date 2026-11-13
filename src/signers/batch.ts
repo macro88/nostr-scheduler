@@ -23,9 +23,13 @@ export async function signApproved(args: {
   item: Approved;
   now: UnixSeconds;
   maxAheadSeconds: number;
-  relayHint: RelayUrl;
+  relayHint?: RelayUrl;
 }): Promise<SignedWork> {
   assertNoPrivateKey(args.item.draft);
+  const relayHint = args.relayHint;
+  if (args.item.draft.type !== "note" && !relayHint) {
+    throw new Error("add a relay before signing");
+  }
   const check = (createdAt: UnixSeconds) =>
     assertWithinSignHorizon({ now: args.now, createdAt, maxAheadSeconds: args.maxAheadSeconds });
   const events: SignedEvent[] = [];
@@ -41,7 +45,7 @@ export async function signApproved(args: {
     const unsigned = replyUnsigned({
       pubkey: args.signer.pubkey,
       draft: args.item.draft,
-      relayHint: args.relayHint,
+      relayHint: neededHint(relayHint),
     });
     check(unsigned.created_at);
     events.push(await signOne(args.signer, unsigned));
@@ -49,7 +53,7 @@ export async function signApproved(args: {
     const plan = threadPlanFromDraft({
       pubkey: args.signer.pubkey,
       draft: args.item.draft,
-      relayHint: args.relayHint,
+      relayHint: neededHint(relayHint),
     });
     check(plan.root.created_at);
     for (const reply of plan.replyDrafts) check(reply.created_at);
@@ -66,6 +70,11 @@ export async function signApproved(args: {
   const [first, ...rest] = events;
   if (first === undefined) throw new Error("nothing to sign");
   return markSigned(args.item, { events: [first, ...rest], at: args.now });
+}
+
+function neededHint(hint: RelayUrl | undefined): RelayUrl {
+  if (!hint) throw new Error("add a relay before signing");
+  return hint;
 }
 
 export function systemNow(): UnixSeconds {

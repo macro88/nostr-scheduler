@@ -69,9 +69,18 @@ export type MockSignerRef = {
 
 export type SignerRef = Nip07SignerRef | Nip46SignerRef | Nip55SignerRef | MockSignerRef;
 
+export type ListedRelay = {
+  readonly url: RelayUrl;
+  readonly publish: boolean;
+  readonly flagged: boolean;
+  readonly public: boolean;
+};
+
 export type RelayPolicy = {
-  readonly configured: NonEmpty<RelayUrl>;
+  readonly configured: readonly RelayUrl[];
+  readonly listed: readonly ListedRelay[];
   readonly readNip65: boolean;
+  readonly allowPublicRelays: boolean;
 };
 
 export type Profile = {
