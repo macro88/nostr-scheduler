@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Badge, Button, ConfirmSheet, Input } from "@macro88/ui";
 import { api, type Profile } from "../api";
@@ -6,6 +7,8 @@ import { containsPrivateKey } from "../../../src/domain/private-key.js";
 import { isNpub, shortNpub } from "../npub";
 import { fieldCollapse, fieldCollapseReduced, fieldExpand, fieldExpandReduced } from "../profile-motion";
 import { notifySuccess } from "../toasts";
+
+export const SheetHostContext = createContext<HTMLElement | null>(null);
 
 const secretWarning =
   "That's a private key (nsec). This app never needs it. Paste your npub, and keep your nsec in your signer.";
@@ -54,6 +57,7 @@ export function ProfileForm({
   onSaved: (id: string) => void;
   onRemoved?: () => void;
 }) {
+  const sheetHost = useContext(SheetHostContext);
   const reduced = useReduced();
   const collapse = reduced ? fieldCollapseReduced : fieldCollapse;
   const expand = reduced ? fieldExpandReduced : fieldExpand;
@@ -256,6 +260,30 @@ export function ProfileForm({
     count === 0
       ? "This profile has no queued or signed notes."
       : `This discards ${count} queued or signed ${count === 1 ? "note" : "notes"} for this profile. They haven't been published and can't be recovered.`;
+
+  const sheets = (
+    <>
+      <ConfirmSheet
+        open={askPublic}
+        onOpenChange={setAskPublic}
+        title={`Allow public relays for ${label.trim() || "this profile"}?`}
+        description="Notes scheduled for this profile can then go to public relays, where anyone can read them. A deletion request later may not remove them."
+        confirmLabel="Allow public relays"
+        cancelLabel="Keep them off"
+        onConfirm={() => setAllowPublic(true)}
+      />
+      <ConfirmSheet
+        open={askRemove}
+        onOpenChange={setAskRemove}
+        title={`Remove ${label.trim() || "this profile"}?`}
+        description={removeCopy}
+        confirmLabel="Remove profile"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={() => void remove()}
+      />
+    </>
+  );
 
   return (
     <form
@@ -511,25 +539,7 @@ export function ProfileForm({
           </Button>
         ) : null}
       </div>
-      <ConfirmSheet
-        open={askPublic}
-        onOpenChange={setAskPublic}
-        title={`Allow public relays for ${label.trim() || "this profile"}?`}
-        description="Notes scheduled for this profile can then go to public relays, where anyone can read them. A deletion request later may not remove them."
-        confirmLabel="Allow public relays"
-        cancelLabel="Keep them off"
-        onConfirm={() => setAllowPublic(true)}
-      />
-      <ConfirmSheet
-        open={askRemove}
-        onOpenChange={setAskRemove}
-        title={`Remove ${label.trim() || "this profile"}?`}
-        description={removeCopy}
-        confirmLabel="Remove profile"
-        cancelLabel="Keep it"
-        destructive
-        onConfirm={() => void remove()}
-      />
+      {sheetHost ? createPortal(sheets, sheetHost) : sheets}
     </form>
   );
 }

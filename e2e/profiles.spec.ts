@@ -36,6 +36,48 @@ async function settle(page: Page) {
   });
 }
 
+async function dismissToast(page: Page) {
+  const toast = page.locator("[data-sonner-toast]");
+  if ((await toast.count()) === 0) return;
+  await page.mouse.move(0, 0);
+  await expect(toast).toHaveCount(0, { timeout: 8000 });
+}
+
+async function shootFull(page: Page, selector: string, file: string) {
+  const target = page.locator(selector).first();
+  await expect(target).toBeVisible();
+  const height = await target.evaluate((node) => {
+    const loosen = (element: Element | null) => {
+      if (!(element instanceof HTMLElement) || element.dataset.shotStyle !== undefined) return;
+      element.dataset.shotStyle = element.getAttribute("style") ?? "";
+      element.style.overflow = "visible";
+      element.style.height = "auto";
+      element.style.maxHeight = "none";
+      element.style.minHeight = "0";
+      element.style.flex = "none";
+    };
+    loosen(document.querySelector("main"));
+    loosen(document.querySelector(".profile-settings"));
+    loosen(document.querySelector(".profile-detail"));
+    loosen(node);
+    window.scrollTo(0, 0);
+    document.querySelector("main")?.scrollTo(0, 0);
+    const box = node.getBoundingClientRect();
+    return Math.ceil(box.top + window.scrollY + box.height);
+  });
+  const width = page.viewportSize()?.width ?? 1440;
+  await page.setViewportSize({ width, height: Math.max(height + 16, 900) });
+  await target.screenshot({ path: file, animations: "disabled" });
+  await page.evaluate(() => {
+    document.querySelectorAll<HTMLElement>("[data-shot-style]").forEach((element) => {
+      const previous = element.dataset.shotStyle ?? "";
+      if (previous) element.setAttribute("style", previous);
+      else element.removeAttribute("style");
+      delete element.dataset.shotStyle;
+    });
+  });
+}
+
 async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" = "form") {
   const shotDir = screenshotDir();
   if (!shotDir) return;
@@ -48,7 +90,22 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
         if (width === 390) await expect(page.locator(".profile-stage")).toBeVisible();
         else await expect(page.locator(".profile-stage")).toHaveCount(0);
       }
-      if (width === 390 && (name === "settings-detail" || name === "bunker-masked" || name === "remove-notes" || name === "remove-empty")) {
+      await dismissToast(page);
+      if (width === 1440 && name === "settings-detail") {
+        await page.getByTestId("add-profile").click();
+        await expect(page.getByTestId("profile-create")).toBeVisible();
+      }
+      if (width === 390 && name === "settings-detail") {
+        if ((await page.getByTestId("profile-detail").count()) === 0) {
+          if ((await page.getByTestId("profile-back").count()) > 0) {
+            await page.getByTestId("profile-back").click();
+            await expect(page.getByTestId("profile-list")).toBeVisible();
+          }
+          await page.getByTestId("profile-row-desk").click();
+        }
+        await expect(page.getByTestId("profile-detail")).toBeVisible();
+      }
+      if (width === 390 && (name === "bunker-masked" || name === "remove-notes" || name === "remove-empty")) {
         if ((await page.getByTestId("profile-back").count()) === 0) {
           await page.locator("[data-testid^='profile-row-']").first().click();
         }
@@ -71,18 +128,38 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
       const shot = { path: file, animations: "disabled" as const };
       if (kind === "sheet") {
         await expect(page.getByRole("alertdialog")).toBeVisible();
-        await settle(page);
+        await expect.poll(() => page.getByRole("alertdialog").evaluate((dialog) => {
+          const style = getComputedStyle(dialog);
+          if (Number(style.opacity) < 0.99) return false;
+          if (style.transform === "none") return true;
+          const parts = style.transform.slice(style.transform.indexOf("(") + 1, -1).split(",").map((part) => Number.parseFloat(part.trim()));
+          const ty = parts.length === 6 ? parts[5] : parts[13];
+          return ty !== undefined && Math.abs(ty) < 0.5;
+        })).toBe(true);
+        if (width === 390) {
+          const hit = await page.getByRole("alertdialog").evaluate((dialog) => {
+            const rect = dialog.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const target = document.elementFromPoint(x, y);
+            return {
+              inSheet: Boolean(target?.closest(".sheet, [role='alertdialog']")),
+              inForm: Boolean(target?.closest(".profile-setup")),
+              target: target ? `${target.tagName}.${String(target.className)}` : null,
+            };
+          });
+          expect(hit.inSheet, JSON.stringify(hit)).toBe(true);
+          expect(hit.inForm, JSON.stringify(hit)).toBe(false);
+        }
         await page.screenshot(shot);
       } else if (width === 390 && (name === "settings-detail" || name === "bunker-masked")) {
         const form = page.getByTestId("profile-pane").locator("[data-testid='profile-detail'], [data-testid='profile-create']").first();
         await expect(form).toBeVisible();
         await settle(page);
         await form.screenshot(shot);
-      } else if (width === 1440 && (await page.locator("[data-testid='profile-detail'], [data-testid='profile-create']").count()) > 0) {
-        const form = page.locator("[data-testid='profile-detail'], [data-testid='profile-create']").first();
-        await expect(form).toBeVisible();
-        await settle(page);
-        await form.screenshot(shot);
+      } else if (width === 1440) {
+        const frame = (await page.locator(".profile-settings").count()) > 0 ? ".profile-settings" : "main";
+        await shootFull(page, frame, file);
       } else {
         await page.screenshot({ ...shot, fullPage: true });
       }
@@ -346,8 +423,10 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
   await page.getByLabel("Criteria file").fill("criteria/demo.md");
   await page.getByLabel("npub", { exact: true }).fill(other.npub);
+  await expect(page.getByTestId("npub-settled")).toBeVisible();
   await page.getByRole("textbox", { name: "Relay", exact: true }).fill(url);
   await page.getByTestId("add-relay").click();
+  await expect(page.getByTestId("relay-row")).toContainText(url);
   await page.getByTestId("save-profile").click();
   await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
   await page.getByTestId("profile").click();

@@ -4,7 +4,7 @@ import { Button } from "@macro88/ui";
 import type { Profile } from "../api";
 import { shortNpub } from "../npub";
 import { detailPop, detailPopReduced, detailPush, detailPushReduced } from "../profile-motion";
-import { ProfileForm } from "./ProfileForm";
+import { ProfileForm, SheetHostContext } from "./ProfileForm";
 
 function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 800px)").matches);
@@ -46,6 +46,7 @@ export function ProfileSettings({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pane, setPane] = useState<"list" | "detail">(narrow ? "list" : "detail");
   const [travel, setTravel] = useState(false);
+  const [sheetHost, setSheetHost] = useState<HTMLDivElement | null>(null);
   const chosen = selected === "new" ? undefined : profiles.find((item) => item.id === selected) ?? profiles[0];
   const push = reduced ? detailPushReduced : detailPush;
   const pop = reduced ? detailPopReduced : detailPop;
@@ -122,7 +123,8 @@ export function ProfileSettings({
   );
 
   return (
-    <div className="profile-settings" data-testid="profile-settings">
+    <SheetHostContext.Provider value={sheetHost}>
+      <div className="profile-settings" data-testid="profile-settings">
       {narrow ? (
         <div className="profile-stage">
           <AnimatePresence mode="sync" initial={false}>
@@ -152,7 +154,9 @@ export function ProfileSettings({
       ) : (
         <Wide panes={{ list, detail }} />
       )}
-    </div>
+      <div ref={setSheetHost} className="profile-sheet-host" data-testid="profile-sheet-host" />
+      </div>
+    </SheetHostContext.Provider>
   );
 }
 
