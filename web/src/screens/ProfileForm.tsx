@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Badge, Button, ConfirmSheet, Input } from "@macro88/ui";
 import { api, type Profile } from "../api";
 import { containsPrivateKey } from "../../../src/domain/private-key.js";
 import { isNpub, shortNpub } from "../npub";
-import { fieldCollapse, fieldCollapseReduced, fieldExpand, fieldExpandReduced, motionEase } from "../profile-motion";
+import { fieldCollapse, fieldCollapseReduced, fieldExpand, fieldExpandReduced } from "../profile-motion";
 import { notifySuccess } from "../toasts";
 
 const secretWarning =
@@ -56,11 +57,6 @@ export function ProfileForm({
   const reduced = useReduced();
   const collapse = reduced ? fieldCollapseReduced : fieldCollapse;
   const expand = reduced ? fieldExpandReduced : fieldExpand;
-  const motionStyle = {
-    "--field-in": `${collapse.animate.transition.duration}s`,
-    "--field-ease": motionEase(collapse.animate.transition.ease),
-    "--field-out": `${expand.exit.transition.duration}s`,
-  } as CSSProperties;
   const [label, setLabel] = useState(profile?.label ?? "");
   const [npub, setNpub] = useState(profile?.npub ?? "");
   const [npubOpen, setNpubOpen] = useState(!profile?.npub);
@@ -264,7 +260,6 @@ export function ProfileForm({
   return (
     <form
       className="profile-setup"
-      style={motionStyle}
       data-testid={mode === "create" ? "profile-create" : "profile-detail"}
       onSubmit={(event) => {
         event.preventDefault();
@@ -286,35 +281,53 @@ export function ProfileForm({
           onChange={(event) => take("label", event.target.value, setLabel)}
         />
         {secretField === "label" ? <SecretLine /> : null}
-        {npubOpen ? (
-          <div className="field-swap" key="npub-open" ref={npubWrap}>
-            <Input
-              className="mono"
-              label="npub"
-              value={npub}
-              aria-invalid={secretField === "npub" || Boolean(npubError) || undefined}
-              onChange={(event) => {
-                take("npub", event.target.value, (next) => {
-                  setNpub(next);
-                  setNpubError("");
-                  if (isNpub(next)) setNpubOpen(false);
-                });
+        <AnimatePresence mode="sync" initial={false}>
+          {npubOpen ? (
+            <motion.div
+              key="npub-open"
+              ref={npubWrap}
+              initial={{ opacity: 0, height: expand.container.height }}
+              animate={{ opacity: expand.incoming.opacity, height: "auto", transition: expand.incoming.transition }}
+              exit={{
+                opacity: collapse.outgoing.opacity,
+                height: collapse.container.height,
+                transition: { opacity: collapse.outgoing.transition, height: collapse.container.transition },
               }}
-            />
-          </div>
-        ) : (
-          <div className="field-swap npub-settled" key="npub-settled">
-            <p className="mono" data-testid="npub-settled" aria-live="polite">
-              {shortNpub(npub)}
-            </p>
-            <Button type="button" variant="ghost" onClick={() => void navigator.clipboard.writeText(npub)}>
-              Copy
-            </Button>
-            <Button ref={changeRef} type="button" variant="ghost" data-testid="change-npub" onClick={() => setNpubOpen(true)}>
-              Change
-            </Button>
-          </div>
-        )}
+            >
+              <Input
+                className="mono"
+                label="npub"
+                value={npub}
+                aria-invalid={secretField === "npub" || Boolean(npubError) || undefined}
+                onChange={(event) => {
+                  take("npub", event.target.value, (next) => {
+                    setNpub(next);
+                    setNpubError("");
+                    if (isNpub(next)) setNpubOpen(false);
+                  });
+                }}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="npub-settled"
+              className="npub-settled"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: collapse.incoming.opacity, height: "auto", transition: collapse.incoming.transition }}
+              exit={{ opacity: expand.outgoing.opacity, transition: expand.outgoing.transition }}
+            >
+              <p className="mono" data-testid="npub-settled" aria-live="polite">
+                {shortNpub(npub)}
+              </p>
+              <Button type="button" variant="ghost" onClick={() => void navigator.clipboard.writeText(npub)}>
+                Copy
+              </Button>
+              <Button ref={changeRef} type="button" variant="ghost" data-testid="change-npub" onClick={() => setNpubOpen(true)}>
+                Change
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
         {secretField === "npub" ? <SecretLine /> : null}
         {npubError ? <p className="field-note">{npubError}</p> : null}
         <Input
@@ -358,7 +371,7 @@ export function ProfileForm({
           ))}
         </fieldset>
         {kind === "nip46" ? (
-          <div className="field-swap" data-testid="bunker-field">
+          <div data-testid="bunker-field">
             {settled ? (
               <p className="mono" data-testid="bunker-masked">
                 {masked}
@@ -418,7 +431,7 @@ export function ProfileForm({
         {relays.length === 0 ? <p className="field-note">No relays yet. Add a local relay, such as ws://127.0.0.1 with its port.</p> : null}
         <ul className="relay-list">
           {relays.map((item) => (
-            <li key={item.url} className={`relay-row field-swap${item.public && !allowPublic ? " is-off" : ""}`} data-testid="relay-row">
+            <li key={item.url} className={`relay-row${item.public && !allowPublic ? " is-off" : ""}`} data-testid="relay-row">
               <span className="mono">{item.url}</span>
               {item.public && allowPublic ? (
                 <Badge tone="warning" className="public-badge">
@@ -493,7 +506,7 @@ export function ProfileForm({
           {mode === "create" ? "Save profile" : "Save changes"}
         </Button>
         {mode === "edit" ? (
-          <Button type="button" variant="ghost" className="danger-text" data-testid="remove-profile" onClick={() => setAskRemove(true)}>
+          <Button type="button" variant="ghost" className="danger-text" style={{ color: "var(--color-danger-fg)" }} data-testid="remove-profile" onClick={() => setAskRemove(true)}>
             Remove profile
           </Button>
         ) : null}

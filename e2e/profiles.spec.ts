@@ -25,15 +25,45 @@ async function setScheme(page: Page, scheme: "light" | "dark") {
   }));
 }
 
-async function shots(page: Page, name: string) {
+async function settle(page: Page) {
+  await page.evaluate(async () => {
+    const pending = () => document.getAnimations().filter((anim) => anim.playState === "running");
+    let running = pending();
+    while (running.length > 0) {
+      await Promise.all(running.map((anim) => anim.finished.catch(() => undefined)));
+      running = pending();
+    }
+  });
+}
+
+async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" = "form") {
   const shotDir = screenshotDir();
   if (!shotDir) return;
   mkdirSync(shotDir, { recursive: true });
   for (const theme of ["light", "dark"] as const) {
-    await setScheme(page, theme);
     for (const width of [1440, 390]) {
+      await setScheme(page, theme);
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await page.screenshot({ path: `${shotDir}/${name}-${theme}-${width}.png`, fullPage: true });
+      if (width === 390 && (name === "settings-detail" || name === "bunker-masked" || name === "remove-notes" || name === "remove-empty")) {
+        if ((await page.getByTestId("profile-pane").count()) === 0) {
+          const row = page.locator("[data-testid^='profile-row-']").first();
+          if ((await row.count()) > 0) await row.click();
+        }
+      }
+      if (width === 390 && name === "settings-list" && (await page.getByTestId("profile-back").count()) > 0) {
+        await page.getByTestId("profile-back").click();
+      }
+      await settle(page);
+      const file = `${shotDir}/${name}-${theme}-${width}.png`;
+      if (kind === "sheet") {
+        await page.screenshot({ path: file });
+      } else if (width === 1440 && (await page.locator(".profile-setup").count()) > 0) {
+        await page.locator(".profile-setup").first().screenshot({ path: file });
+      } else if (width === 390 && (name === "settings-detail" || name === "bunker-masked")) {
+        await page.getByTestId("profile-pane").screenshot({ path: file });
+      } else {
+        await page.screenshot({ path: file, fullPage: true });
+      }
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -137,7 +167,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("public-switch").click();
   await expect(page.getByTestId("public-switch")).not.toBeChecked();
   await expect(page.getByText(`Allow public relays for Desk?`)).toBeVisible();
-  await shots(page, "opt-in-sheet");
+  await shots(page, "opt-in-sheet", "sheet");
   await page.getByRole("button", { name: "Keep them off" }).click();
   await expect(page.getByTestId("public-switch")).not.toBeChecked();
   await page.getByTestId("public-switch").click();
@@ -190,15 +220,59 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("profile").click();
   await page.getByTestId("manage-profiles").click();
   await expect(page.getByTestId("profile-settings")).toBeVisible();
-  await shots(page, "settings-list");
+  const addChrome = await page.getByTestId("add-profile").evaluate((node) => {
+    const style = getComputedStyle(node);
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--color-text)";
+    const text = getComputedStyle(probe).color;
+    probe.style.backgroundColor = "var(--color-surface)";
+    const surface = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return {
+      classes: node.className,
+      direction: style.flexDirection,
+      shadow: style.boxShadow,
+      background: style.backgroundColor,
+      color: style.color,
+      text,
+      surface,
+    };
+  });
+  expect(addChrome.classes).toContain("inline-flex");
+  expect(addChrome.classes).toContain("button-outline");
+  expect(addChrome.direction).toBe("row");
+  expect(addChrome.shadow).not.toBe("none");
+  expect(addChrome.background).toBe(addChrome.surface);
+  expect(addChrome.color).toBe(addChrome.text);
+  await shots(page, "settings-list", "page");
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByTestId("profile-row-desk").click();
-  await expect(page.getByTestId("profile-detail")).toBeVisible();
-  await shots(page, "settings-detail");
+  if ((await page.getByTestId("profile-pane").count()) === 0) await page.getByTestId("profile-row-desk").click();
+  await expect(page.getByTestId("profile-pane")).toBeVisible();
+  await shots(page, "settings-detail", "form");
+  await page.setViewportSize({ width: 390, height: 844 });
+  if ((await page.getByTestId("profile-pane").count()) === 0) await page.getByTestId("profile-row-desk").click();
+  await expect(page.getByTestId("profile-pane")).toBeVisible();
+  await page.getByTestId("profile-back").click();
+  const popped = await page.evaluate(async () => {
+    const moving = () =>
+      document.getAnimations().filter((anim) => {
+        const read = anim.effect as { getKeyframes?: () => unknown } | null;
+        const frames = read?.getKeyframes?.();
+        const text = JSON.stringify(frames ?? "");
+        return text.includes("matrix") || text.includes("translate");
+      });
+    const started = moving().length > 0;
+    await Promise.all(document.getAnimations().map((anim) => anim.finished.catch(() => undefined)));
+    return started;
+  });
+  expect(popped).toBe(true);
+  await expect(page.getByTestId("profile-list")).toBeVisible();
+  await expect(page.getByTestId("profile-pane")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByTestId("remove-profile").click();
   await expect(page.getByText("This profile has no queued or signed notes.")).toBeVisible();
-  await shots(page, "remove-empty");
+  await shots(page, "remove-empty", "sheet");
   await page.getByRole("button", { name: "Keep it" }).click();
 
   const waiting = await page.evaluate(async (profileId) => {
@@ -241,7 +315,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("profile-row-desk").click();
   await page.getByTestId("remove-profile").click();
   await expect(page.getByText("This discards 1 queued or signed note for this profile.")).toBeVisible();
-  await shots(page, "remove-notes");
+  await shots(page, "remove-notes", "sheet");
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
   await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);

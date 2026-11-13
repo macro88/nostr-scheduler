@@ -24,6 +24,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@macro88/motion": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz",
     "@macro88/theme-nostr": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz",
     "@macro88/ui": "https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz",
     "@hono/node-server": "^2.1.6",
@@ -33,6 +34,7 @@
     "@noble/hashes": "^2.0.1",
     "@scure/base": "^2.4.0",
     "hono": "^4.13.17",
+    "motion": "12.23.24",
     "nostr-tools": "^2.26.0",
     "qrcode": "^1.5.4",
     "ws": "^8.18.3",
