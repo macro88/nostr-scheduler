@@ -44,30 +44,60 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
     for (const width of [1440, 390]) {
       await setScheme(page, theme);
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      if (width === 390 && (name === "settings-detail" || name === "bunker-masked" || name === "remove-notes" || name === "remove-empty")) {
-        if ((await page.getByTestId("profile-pane").count()) === 0) {
-          const row = page.locator("[data-testid^='profile-row-']").first();
-          if ((await row.count()) > 0) await row.click();
-        }
+      if ((await page.getByTestId("profile-settings").count()) > 0) {
+        if (width === 390) await expect(page.locator(".profile-stage")).toBeVisible();
+        else await expect(page.locator(".profile-stage")).toHaveCount(0);
       }
-      if (width === 390 && name === "settings-list" && (await page.getByTestId("profile-back").count()) > 0) {
-        await page.getByTestId("profile-back").click();
+      if (width === 390 && (name === "settings-detail" || name === "bunker-masked" || name === "remove-notes" || name === "remove-empty")) {
+        if ((await page.getByTestId("profile-back").count()) === 0) {
+          await page.locator("[data-testid^='profile-row-']").first().click();
+        }
+        await expect(page.getByTestId("profile-pane").locator(".profile-setup")).toBeVisible();
+      }
+      if (width === 390 && name === "settings-list") {
+        if ((await page.getByTestId("profile-back").count()) > 0) await page.getByTestId("profile-back").click();
+        await expect(page.getByTestId("profile-list")).toBeVisible();
+        await expect(page.getByTestId("profile-back")).toHaveCount(0);
+      }
+      if (kind === "sheet" && (await page.getByRole("alertdialog").count()) === 0) {
+        if (name.startsWith("remove")) {
+          await expect(page.getByTestId("remove-profile")).toBeVisible();
+          await page.getByTestId("remove-profile").click();
+        }
+        if (name === "opt-in-sheet") await page.getByTestId("public-switch").click();
       }
       await settle(page);
       const file = `${shotDir}/${name}-${theme}-${width}.png`;
+      const shot = { path: file, animations: "disabled" as const };
       if (kind === "sheet") {
-        await page.screenshot({ path: file });
-      } else if (width === 1440 && (await page.locator(".profile-setup").count()) > 0) {
-        await page.locator(".profile-setup").first().screenshot({ path: file });
+        await expect(page.getByRole("alertdialog")).toBeVisible();
+        await settle(page);
+        await page.screenshot(shot);
       } else if (width === 390 && (name === "settings-detail" || name === "bunker-masked")) {
-        await page.getByTestId("profile-pane").screenshot({ path: file });
+        const form = page.getByTestId("profile-pane").locator("[data-testid='profile-detail'], [data-testid='profile-create']").first();
+        await expect(form).toBeVisible();
+        await settle(page);
+        await form.screenshot(shot);
+      } else if (width === 1440 && (await page.locator("[data-testid='profile-detail'], [data-testid='profile-create']").count()) > 0) {
+        const form = page.locator("[data-testid='profile-detail'], [data-testid='profile-create']").first();
+        await expect(form).toBeVisible();
+        await settle(page);
+        await form.screenshot(shot);
       } else {
-        await page.screenshot({ path: file, fullPage: true });
+        await page.screenshot({ ...shot, fullPage: true });
       }
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await setScheme(page, "light");
+  if ((await page.getByTestId("profile-settings").count()) > 0) {
+    await expect(page.locator(".profile-stage")).toHaveCount(0);
+  }
+  if (kind === "sheet" && (await page.getByRole("alertdialog").count()) === 0) {
+    if (name.startsWith("remove")) await page.getByTestId("remove-profile").click();
+    if (name === "opt-in-sheet") await page.getByTestId("public-switch").click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+  }
 }
 
 async function axe(page: Page, label: string) {
@@ -253,20 +283,11 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.setViewportSize({ width: 390, height: 844 });
   if ((await page.getByTestId("profile-pane").count()) === 0) await page.getByTestId("profile-row-desk").click();
   await expect(page.getByTestId("profile-pane")).toBeVisible();
-  await page.getByTestId("profile-back").click();
-  const popped = await page.evaluate(async () => {
-    const moving = () =>
-      document.getAnimations().filter((anim) => {
-        const read = anim.effect as { getKeyframes?: () => unknown } | null;
-        const frames = read?.getKeyframes?.();
-        const text = JSON.stringify(frames ?? "");
-        return text.includes("matrix") || text.includes("translate");
-      });
-    const started = moving().length > 0;
-    await Promise.all(document.getAnimations().map((anim) => anim.finished.catch(() => undefined)));
-    return started;
+  await page.evaluate(() => {
+    delete document.documentElement.dataset.paneTravel;
   });
-  expect(popped).toBe(true);
+  await page.getByTestId("profile-back").click();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.paneTravel ?? "")).toBe("1");
   await expect(page.getByTestId("profile-list")).toBeVisible();
   await expect(page.getByTestId("profile-pane")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -132,6 +132,7 @@ export function ProfileSettings({
                 initial={travel ? pop.list.initial : false}
                 animate={pop.list.animate}
                 exit={push.list.exit}
+                onUpdate={(latest) => noteTravel(latest.x)}
               >
                 {list}
               </motion.div>
@@ -141,6 +142,7 @@ export function ProfileSettings({
                 initial={travel ? push.detail.initial : false}
                 animate={push.detail.animate}
                 exit={pop.detail.exit}
+                onUpdate={(latest) => noteTravel(latest.x)}
               >
                 {detail}
               </motion.div>
@@ -152,6 +154,10 @@ export function ProfileSettings({
       )}
     </div>
   );
+}
+
+function noteTravel(x: unknown) {
+  if (typeof x === "number" && Math.abs(x) > 1) document.documentElement.dataset.paneTravel = "1";
 }
 
 function Wide({ panes }: { panes: { list: ReactNode; detail: ReactNode } }) {
