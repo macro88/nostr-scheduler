@@ -22,7 +22,7 @@ async function runLocalRelay(port: number): Promise<void> {
   relay.logAccepted = true;
   const url = await relay.start(port);
   console.log(`relay ${url}`);
-  console.log(`Put ${url} in the profile relays list in data/profiles.yaml.`);
+  console.log(`Add ${url} under Relays on the profile setup page.`);
   let stopping = false;
   const shutdown = () => {
     if (stopping) return;

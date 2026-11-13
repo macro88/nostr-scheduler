@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { suggestionId } from "../domain/brand.ts";
+import { InputError, suggestionId } from "../domain/brand.ts";
 import { parseDraft } from "../domain/draft.ts";
 import { signAheadSeconds } from "../domain/defaults.ts";
-import { PrivateKeyInContentError } from "../domain/private-key.ts";
+import { assertValueHasNoPrivateKey, containsPrivateKey, PrivateKeyInContentError } from "../domain/private-key.ts";
 import { systemNow } from "../signers/batch.ts";
 import { connectBunker } from "../signers/nip46.ts";
 import { loadOrCreateSession, wipeSession, type SessionLoadOptions } from "../signers/nip46-session.ts";
@@ -42,6 +42,8 @@ import {
   signSubmitSchema,
   suggestionSchema,
 } from "./schema.ts";
+import { mountProfileRoutes } from "./profile-routes.ts";
+import { profileJson } from "./profile-view.ts";
 import { createGuard, issueSession } from "./security.ts";
 
 type Listener = (data: string) => void;
@@ -119,17 +121,17 @@ export function createApp(options: AppOptions) {
       }
     }),
   );
-  app.get("/api/profiles", (c) =>
-    c.json(
-      profiles().map((item) => ({
-        id: item.id,
-        label: item.label,
-        pubkey: item.pubkey,
-        signer: publicSigner(item).signer,
-        timezone: "UTC",
-      })),
-    ),
-  );
+  const queuedOrSigned = (item: Profile) =>
+    store.list(item.id).filter((row) => row.status === "queued" || row.status === "signed").length;
+  app.get("/api/profiles", (c) => c.json(profiles().map((item) => profileJson(item, options.dataDir, queuedOrSigned(item)))));
+  mountProfileRoutes(app, {
+    dataDir: options.dataDir,
+    profilesPath,
+    profile,
+    store,
+    now,
+    notify,
+  });
   app.get("/api/items", (c) => {
     const profileId = c.req.query("profileId");
     const items = store.list(profileId ? profile(profileId).id : undefined).map(itemView);
@@ -299,6 +301,7 @@ export function createApp(options: AppOptions) {
     const owner = profile(id);
     const session = loadOrCreateSession(join(options.dataDir, "nip46"), sessionOptions);
     const relay = owner.relays.configured[0];
+    if (!relay) throw new InputError("relays", "add a relay before pairing");
     const connectUri = `nostrconnect://${session.pubkey}?relay=${encodeURIComponent(relay)}&perms=sign_event:1&name=nostr-scheduler`;
     const shown = publicSigner(owner);
     return c.json({
@@ -309,7 +312,10 @@ export function createApp(options: AppOptions) {
     });
   });
   app.post("/api/nip46/pair", async (c) => {
-    const body = bunkerSchema.parse(await c.req.json());
+    const raw = await c.req.text();
+    if (containsPrivateKey(raw)) assertValueHasNoPrivateKey(raw);
+    const body = bunkerSchema.parse(JSON.parse(raw));
+    assertValueHasNoPrivateKey(body);
     const owner = profile(body.profileId);
     await connectBunker({
       bunkerUri: body.bunkerUri,

@@ -81,7 +81,7 @@ describe("standing local relay", () => {
         () => `relay did not print its url (exit ${child.exitCode})\n${stdout}\n${stderr}`,
       );
       expect(stdout).toContain(`relay ${url}\n`);
-      expect(stdout).toContain(`Put ${url} in the profile relays list in data/profiles.yaml.`);
+      expect(stdout).toContain(`Add ${url} under Relays on the profile setup page.`);
       expect(ipv4Listeners(port)).toEqual(["127.0.0.1"]);
 
       const signer = createMockSigner();

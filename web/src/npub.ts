@@ -54,6 +54,41 @@ export function npubFromHex(pubkey: string): string {
   return encodeBech32("npub", bytes);
 }
 
+function convertBitsStrict(data: readonly number[], from: number, to: number): number[] {
+  let acc = 0;
+  let bits = 0;
+  const out: number[] = [];
+  const maxv = (1 << to) - 1;
+  for (const value of data) {
+    acc = (acc << from) | value;
+    bits += from;
+    while (bits >= to) {
+      bits -= to;
+      out.push((acc >> bits) & maxv);
+    }
+  }
+  if (bits >= from || ((acc << (to - bits)) & maxv) !== 0) throw new Error("invalid bech32 padding");
+  return out;
+}
+
+export function isNpub(value: string): boolean {
+  try {
+    if (!value.startsWith("npub1") || value !== value.toLowerCase()) return false;
+    const pos = value.lastIndexOf("1");
+    const hrp = value.slice(0, pos);
+    const words: number[] = [];
+    for (const char of value.slice(pos + 1)) {
+      const index = CHARSET.indexOf(char);
+      if (index === -1) return false;
+      words.push(index);
+    }
+    if (polymod([...hrpExpand(hrp), ...words]) !== 1) return false;
+    return convertBitsStrict(words.slice(0, -6), 5, 8).length === 32;
+  } catch {
+    return false;
+  }
+}
+
 export function shortNpub(pubkey: string): string {
   const npub = npubFromHex(pubkey);
   if (!npub.startsWith("npub1") || npub.length < 16) return npub;

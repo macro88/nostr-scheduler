@@ -50,12 +50,31 @@ profiles:
     signer:
       kind: nip07
     relays:
-      - wss://relay.example
+      - ws://127.0.0.1:7777
     read_nip65: false
+    allow_public_relays: false
     criteria_path: criteria/example.md
 ```
 
-Do not put an `nsec` in any config file. `read_nip65` defaults to false when omitted.
+Do not put an `nsec` in any config file. `read_nip65` defaults to false when omitted. A relay that is not on the loopback interface is not used for publishing until that profile sets `allow_public_relays: true`. See [Profiles](#profiles).
+
+## Profiles
+
+Profiles live in `data/profiles.yaml`. The app reads and writes that file, so a profile you add in the page is the same profile the CLI sees. The HTTP API binds to `127.0.0.1` only.
+
+`GET /api/profiles` lists profiles. `POST /api/profiles` creates one. `PATCH /api/profiles/:id` updates one. `DELETE /api/profiles/:id` removes one. A delete discards queued and signed notes for that profile on this machine. It does not send them.
+
+Send an `npub`. The server derives the hex pubkey and stores it. A hex pubkey in the `npub` field is rejected. Any field that contains `nsec1` is rejected before it is validated or stored, and the value is not written to the file or to the error.
+
+`read_nip65` defaults to false. The NIP-65 switch says that turning it on contacts public relays.
+
+`allow_public_relays` defaults to false. Loopback publish relays (`ws://127.0.0.1`, `ws://localhost`, `ws://[::1]`, any port, and the `wss` forms of those hosts) are used. Any other publish relay is kept in the file and flagged, and the publisher does not use it, until `allow_public_relays` is true. A hand-edited public relay with the flag omitted or false is treated the same way.
+
+A relay named inside a `bunker://` link is only the NIP-46 channel. It is not a publish relay, and it is not subject to the public-relay flag. Responses show that link as `bunker://` plus a shortened pubkey. The secret stays in the file and is not returned.
+
+The criteria path has to resolve inside the data directory. The file does not have to exist yet. The profile says whether it does.
+
+If a profile already lists a public relay and does not set `allow_public_relays: true`, that relay is no longer used for publishing. Set the flag to keep using it.
 
 Check a criteria file with:
 
@@ -127,7 +146,7 @@ A second run is safe. It clears the demo directory and produces a new event id.
 pnpm relay:local
 ```
 
-The process prints `relay ws://127.0.0.1:7777`. Put that URL in the profile's relay list in `data/profiles.yaml`.
+The process prints `relay ws://127.0.0.1:7777`. Add that URL under Relays on the profile setup page.
 
 ```yaml
     relays:

@@ -1449,6 +1449,73 @@ select:focus-visible {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+@layer components {
+  .profile-setup {
+    /* 640px column. space-80 is 5rem, and eight of those is 40rem. */
+    width: min(calc(var(--space-80) * 8), 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .profile-setup h1 { margin-bottom: var(--space-16); }
+  .profile-setup section {
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-20) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+  .profile-setup section:first-of-type { border-top: 0; }
+  .profile-setup h2 { font-size: var(--text-body-lg); font-weight: 600; }
+  .signer-choice { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
+  .signer-choice legend { margin-bottom: var(--space-4); }
+  .signer-choice label { display: flex; align-items: center; gap: var(--space-8); min-height: var(--touch-min); }
+  .switch { display: flex; align-items: center; gap: var(--space-8); min-height: var(--touch-min); }
+  .switch-block { border-top: 1px solid var(--color-border); padding-top: var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
+  .relay-list { list-style: none; display: flex; flex-direction: column; gap: var(--space-8); }
+  .relay-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+  .relay-row.is-off { color: var(--color-muted); }
+  .relay-add { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-8); }
+  .profile-actions { display: flex; align-items: center; gap: var(--space-16); padding-top: var(--space-8); }
+  .danger-text { color: var(--color-danger-fg); }
+  .secret-line { color: var(--color-danger-fg); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
+  .warn-line { color: var(--color-status-warning-fg); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
+  .field-note { color: var(--color-muted); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
+  .profile-setup input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--color-danger-fg); }
+  .npub-settled { display: flex; align-items: center; gap: var(--space-8); }
+  .profile-settings { display: flex; gap: var(--space-32); min-height: 0; flex: 1; }
+  .profile-sheet-host { position: absolute; width: 0; height: 0; overflow: visible; }
+  /* 280px. No single space token is that wide, so this is three space-80 steps plus one space-40. */
+  .profile-list {
+    width: calc(var(--space-80) * 3 + var(--space-40));
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .profile-list .profile-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-8);
+    color: var(--color-muted);
+    border-radius: var(--radius-control);
+  }
+  .profile-list .profile-row.is-current { font-weight: 600; color: var(--color-text); }
+  .profile-list .profile-row:hover { background: var(--color-surface); }
+  .profile-detail { min-width: 0; flex: 1; }
+  .text-button { color: var(--color-text); text-decoration: underline; }
+  @keyframes profile-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  @media (max-width: 800px) {
+    .profile-settings { display: block; }
+    .profile-stage { display: grid; }
+    .profile-stage > * { grid-area: 1 / 1; }
+    .profile-list, .profile-detail { width: 100%; }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

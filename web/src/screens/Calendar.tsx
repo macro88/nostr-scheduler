@@ -16,7 +16,7 @@ const weekClose = 23;
 const dayOpen = 8;
 const dayClose = 21;
 
-export function Calendar({ profileId }: { profileId: string }) {
+export function Calendar({ profileId, canSend = true }: { profileId: string; canSend?: boolean }) {
   const queryClient = useQueryClient();
   const items = useQuery({
     queryKey: ["items", profileId],
@@ -177,6 +177,9 @@ export function Calendar({ profileId }: { profileId: string }) {
           </Button>
         </div>
       </div>
+      {canSend ? null : (
+        <p data-testid="no-relay">Nothing can be sent until this profile has a relay.</p>
+      )}
       {mode === "week" && nextItem?.fireAt[0] ? (
         <div className="next-up">
           <div className="next-up-copy">
