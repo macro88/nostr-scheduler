@@ -68,9 +68,10 @@ export class LocalRelay {
   private readonly events = new Map<string, Stored>();
   private readonly subs = new Map<WebSocket, Subscription[]>();
   failTimes = 0;
+  logAccepted = false;
   url: RelayUrl | null = null;
 
-  async start(): Promise<RelayUrl> {
+  async start(port = 0): Promise<RelayUrl> {
     const http = createServer();
     const wss = new WebSocketServer({ server: http });
     wss.on("connection", (socket) => {
@@ -78,8 +79,18 @@ export class LocalRelay {
       socket.on("message", (data) => this.onMessage(socket, textOf(data)));
       socket.on("close", () => this.subs.delete(socket));
     });
-    await new Promise<void>((resolve) => {
-      http.listen(0, "127.0.0.1", () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => reject(error);
+      http.once("error", onError);
+      try {
+        http.listen(port, "127.0.0.1", () => {
+          http.off("error", onError);
+          resolve();
+        });
+      } catch (error) {
+        http.off("error", onError);
+        reject(error);
+      }
     });
     const address = http.address();
     if (!address || typeof address === "string") throw new Error("relay failed to bind");
@@ -145,6 +156,9 @@ export class LocalRelay {
     };
     this.events.set(stored.id, stored);
     socket.send(JSON.stringify(["OK", stored.id, true, ""]));
+    if (this.logAccepted) {
+      console.log(`accepted ${stored.id} kind ${stored.kind} created_at ${stored.created_at}`);
+    }
     this.broadcast(stored);
   }
 
