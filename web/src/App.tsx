@@ -28,6 +28,7 @@ export function App() {
   const profileButton = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const firstView = useRef(true);
+  const [returnFocus, setReturnFocus] = useState(0);
   const selected = profiles.data?.find((profile) => profile.id === profileId) ?? profiles.data?.[0];
   const sections: Record<View, string> = {
     inbox: "Inbox",
@@ -48,6 +49,20 @@ export function App() {
     }
     document.getElementById("section-title")?.focus();
   }, [view]);
+
+  useEffect(() => {
+    if (returnFocus === 0) return;
+    const outer = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const title = document.getElementById("section-title");
+        if (!title) return;
+        const options: FocusOptions = {};
+        Object.assign(options, { focusVisible: true });
+        title.focus(options);
+      });
+    });
+    return () => window.cancelAnimationFrame(outer);
+  }, [returnFocus]);
 
   useEffect(() => {
     const source = new EventSource("/api/events");
@@ -236,7 +251,9 @@ export function App() {
             onRemoved={() => {
               setManage(false);
               setProfileId("");
-              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] }).then(() => {
+                setReturnFocus((count) => count + 1);
+              });
             }}
           />
         ) : null}

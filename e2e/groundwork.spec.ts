@@ -11,6 +11,71 @@ import { WorkStore } from "../src/work/store.ts";
 const dataDir = "e2e/run";
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
+function durations(value: string): number[] {
+  return value.split(",").map((part) => {
+    const text = part.trim();
+    if (text.endsWith("ms")) return Number.parseFloat(text) / 1000;
+    return Number.parseFloat(text);
+  });
+}
+
+async function colorTokens(page: Page) {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const colorOf = (name: string) => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const paint = { danger: colorOf("--color-danger-fg"), focus: colorOf("--color-focus") };
+    probe.remove();
+    return paint;
+  });
+}
+
+async function fieldPaint(locator: ReturnType<Page["locator"]>) {
+  return locator.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const colorOf = (name: string) => {
+      probe.style.color = `var(${name})`;
+      return getComputedStyle(probe).color;
+    };
+    const paint = {
+      borderColor: style.borderTopColor,
+      borderWidth: style.borderTopWidth,
+      outlineColor: style.outlineColor,
+      outlineWidth: style.outlineWidth,
+      outlineStyle: style.outlineStyle,
+      transition: style.transitionDuration,
+      danger: colorOf("--color-danger-fg"),
+      focus: colorOf("--color-focus"),
+    };
+    probe.remove();
+    return paint;
+  });
+}
+
+async function shotField(page: Page, locator: ReturnType<Page["locator"]>, name: string) {
+  const dir = process.env.SCREENSHOT_DIR?.trim();
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  const box = await locator.boundingBox();
+  if (!box) return;
+  const pad = 12;
+  await page.screenshot({
+    path: `${dir}/${name}.png`,
+    animations: "disabled",
+    clip: {
+      x: Math.max(0, box.x - pad),
+      y: Math.max(0, box.y - pad),
+      width: box.width + pad * 2,
+      height: box.height + pad * 2,
+    },
+  });
+}
+
 async function setScheme(page: Page, scheme: "light" | "dark") {
   await page.evaluate((value) => {
     const root = document.documentElement;
@@ -237,6 +302,20 @@ test("discarding a queued item asks first and escape returns to discard", async 
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Keep" })).toBeFocused();
+  const shotDir = process.env.SCREENSHOT_DIR?.trim();
+  if (shotDir) {
+    mkdirSync(shotDir, { recursive: true });
+    for (const theme of ["light", "dark"] as const) {
+      await setScheme(page, theme);
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await expect(dialog).toBeVisible();
+        await page.screenshot({ path: `${shotDir}/discard-sheet-${theme}-${width}.png`, animations: "disabled" });
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await setScheme(page, "light");
+  }
   const sheetPaint = await dialog.evaluate((node) => {
     return [...node.querySelectorAll("button")].map((button) => {
       const style = getComputedStyle(button);
@@ -509,12 +588,25 @@ test("a pasted private key blocks the composer until it is removed", async ({ pa
   await expect(page.getByTestId("note-text")).toHaveAttribute("aria-describedby", "private-key-alert");
   await expect(page.getByTestId("save-draft")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeDisabled();
-  const faded = await page.getByTestId("save-draft").evaluate((node) => Number(getComputedStyle(node).opacity));
-    expect(faded).toBeLessThan(1);
+  const note = page.getByTestId("note-text");
+  await expect(note).toBeFocused();
+  const tokens = await colorTokens(page);
+  const danger = await fieldPaint(note);
+  expect(durations(danger.transition).every((value) => Math.abs(value - 0.12) < 0.01)).toBe(true);
+  await expect.poll(async () => (await fieldPaint(note)).borderColor).toBe(tokens.danger);
+  await expect.poll(async () => (await fieldPaint(note)).borderWidth).toBe("1px");
+  await expect.poll(async () => (await fieldPaint(note)).outlineColor).toBe(tokens.danger);
+  await expect.poll(async () => (await fieldPaint(note)).outlineWidth).toBe("2px");
+  await note.blur();
+  const resting = await fieldPaint(note);
+  expect(resting.borderColor).toBe(resting.danger);
+  expect(resting.outlineStyle).toBe("none");
+  await shotField(page, note, "secret-composer-unfocused");
+  await note.focus();
+  await shotField(page, note, "secret-composer-focused");
   for (const theme of ["light", "dark"] as const) {
     await setScheme(page, theme);
     const paint = await page.getByTestId("save-draft").evaluate((node) => {
-      if (node instanceof HTMLElement) node.style.transition = "none";
       const probe = document.createElement("span");
       document.body.append(probe);
       const read = (name: string) => {
@@ -522,19 +614,27 @@ test("a pasted private key blocks the composer until it is removed", async ({ pa
         return getComputedStyle(probe).color;
       };
       const style = getComputedStyle(node);
-      const accent = read("--color-accent");
-      const onAccent = read("--color-accent-on");
+      const fill = read("--color-disabled-bg");
+      const ink = read("--color-disabled-fg");
       probe.remove();
-      return { background: style.backgroundColor, color: style.color, accent, onAccent };
+      return { background: style.backgroundColor, color: style.color, fill, ink };
     });
-    expect(paint.background, theme).toBe(paint.accent);
-    expect(paint.color, theme).toBe(paint.onAccent);
+    expect(paint.background, theme).toBe(paint.fill);
+    expect(paint.color, theme).toBe(paint.ink);
     const results = await new AxeBuilder({ page }).analyze();
     const blocking = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
     expect(blocking, `${theme}\n${JSON.stringify(blocking, null, 2)}`).toEqual([]);
   }
   await page.getByTestId("note-text").fill("a clean note");
   await expect(alert).toHaveCount(0);
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("--motion-duration-fast");
+  });
+  const noteField = page.getByTestId("note-text");
+  await expect.poll(async () => {
+    const paint = await fieldPaint(noteField);
+    return paint.outlineColor === paint.focus && paint.borderColor !== paint.danger && paint.outlineWidth === "2px";
+  }).toBe(true);
   await expect(page.getByTestId("save-draft")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Save without scheduling" })).toBeEnabled();
   await relay.stop();

@@ -119,11 +119,22 @@ h2 {
   font-optical-sizing: auto;
 }
 .caption, .hint, .kbd-hints, .when, .log-result, .bunker-status, .page-kicker {
+  font-family: var(--font-display);
   font-size: 13px;
   line-height: 18px;
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--color-muted);
+}
+label,
+.field-note,
+.field ~ p.type-caption {
+  font-family: var(--font-display);
+}
+.type-body-lg.font-body,
+.type-body-md.font-body,
+.type-body-sm.font-body {
+  font-family: var(--font-body);
 }
 .page-head {
   display: flex;
@@ -438,14 +449,29 @@ button.check { padding: 0; }
   background: transparent;
   color: var(--color-text);
   padding: 0 0 var(--space-16);
+  border: var(--border-width) solid transparent;
   border-radius: 0;
   caret-color: var(--color-accent);
   box-shadow: none;
+}
+.field,
+textarea.editor {
+  transition-property: border-color, outline-color, color;
+  transition-duration: var(--motion-duration-fast);
+  transition-timing-function: var(--motion-ease-standard);
+}
+textarea.editor[aria-invalid="true"] {
+  border-color: var(--color-danger-fg);
 }
 textarea.editor:focus-visible {
   outline: var(--focus-width) solid var(--color-focus);
   outline-offset: var(--focus-offset);
   box-shadow: none;
+}
+textarea.editor[aria-invalid="true"]:focus-visible,
+.field[data-invalid="true"]:focus-visible {
+  outline: var(--focus-width) solid var(--color-danger-fg);
+  outline-offset: var(--focus-offset);
 }
 .editor::placeholder { color: var(--color-muted); opacity: 1; }
 .composer-meta {
@@ -1467,21 +1493,15 @@ select:focus-visible {
   }
   .profile-setup section:first-of-type { border-top: 0; }
   .profile-setup h2 { font-size: var(--text-body-lg); font-weight: 600; }
-  .signer-choice { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-8); }
-  .signer-choice legend { margin-bottom: var(--space-4); }
-  .signer-choice label { display: flex; align-items: center; gap: var(--space-8); min-height: var(--touch-min); }
-  .switch { display: flex; align-items: center; gap: var(--space-8); min-height: var(--touch-min); }
+  .signer-choice label { min-height: var(--touch-min); }
   .switch-block { border-top: 1px solid var(--color-border); padding-top: var(--space-12); display: flex; flex-direction: column; gap: var(--space-4); }
   .relay-list { list-style: none; display: flex; flex-direction: column; gap: var(--space-8); }
   .relay-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
   .relay-row.is-off { color: var(--color-muted); }
   .relay-add { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-8); }
   .profile-actions { display: flex; align-items: center; gap: var(--space-16); padding-top: var(--space-8); }
-  .danger-text { color: var(--color-danger-fg); }
-  .secret-line { color: var(--color-danger-fg); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
   .warn-line { color: var(--color-status-warning-fg); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
   .field-note { color: var(--color-muted); animation: profile-fade var(--motion-duration-fast) var(--motion-ease-standard); }
-  .profile-setup input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--color-danger-fg); }
   .npub-settled { display: flex; align-items: center; gap: var(--space-8); }
   .profile-settings { display: flex; gap: var(--space-32); min-height: 0; flex: 1; }
   .profile-sheet-host { position: absolute; width: 0; height: 0; overflow: visible; }
@@ -1499,11 +1519,15 @@ select:focus-visible {
     align-items: flex-start;
     gap: var(--space-2);
     padding: var(--space-8);
+    font-weight: 400;
     color: var(--color-muted);
+    background: transparent;
     border-radius: var(--radius-control);
   }
   .profile-list .profile-row.is-current { font-weight: 600; color: var(--color-text); }
-  .profile-list .profile-row:hover { background: var(--color-surface); }
+  .profile-list .profile-row:not(.is-current):hover {
+    background: var(--color-surface);
+  }
   .profile-detail { min-width: 0; flex: 1; }
   .text-button { color: var(--color-text); text-decoration: underline; }
   @keyframes profile-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -1522,6 +1546,10 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
+  }
+  .field,
+  textarea.editor {
+    transition-duration: 0s !important;
   }
   .button:active:not(:disabled) { transform: none; }
 }

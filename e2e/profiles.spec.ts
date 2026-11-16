@@ -121,7 +121,7 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
           await expect(page.getByTestId("remove-profile")).toBeVisible();
           await page.getByTestId("remove-profile").click();
         }
-        if (name === "opt-in-sheet") await page.getByTestId("public-switch").click();
+        if (name === "opt-in-sheet") await page.getByRole("switch", { name: "Allow public relays" }).click();
       }
       await settle(page);
       const file = `${shotDir}/${name}-${theme}-${width}.png`;
@@ -152,7 +152,13 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
           expect(hit.inForm, JSON.stringify(hit)).toBe(false);
         }
         await page.screenshot(shot);
-      } else if (width === 390 && (name === "settings-detail" || name === "bunker-masked")) {
+      } else if (width === 390 && name === "settings-detail") {
+        const pane = page.getByTestId("profile-pane");
+        await expect(pane).toBeVisible();
+        await expect(page.getByTestId("profile-back")).toBeVisible();
+        await settle(page);
+        await pane.screenshot(shot);
+      } else if (width === 390 && name === "bunker-masked") {
         const form = page.getByTestId("profile-pane").locator("[data-testid='profile-detail'], [data-testid='profile-create']").first();
         await expect(form).toBeVisible();
         await settle(page);
@@ -172,7 +178,7 @@ async function shots(page: Page, name: string, kind: "form" | "sheet" | "page" =
   }
   if (kind === "sheet" && (await page.getByRole("alertdialog").count()) === 0) {
     if (name.startsWith("remove")) await page.getByTestId("remove-profile").click();
-    if (name === "opt-in-sheet") await page.getByTestId("public-switch").click();
+    if (name === "opt-in-sheet") await page.getByRole("switch", { name: "Allow public relays" }).click();
     await expect(page.getByRole("alertdialog")).toBeVisible();
   }
 }
@@ -199,8 +205,41 @@ async function emptyProfiles(page: Page) {
   });
 }
 
+async function createProfile(page: Page, label: string, npub: string, relayUrl: string) {
+  await page.evaluate(
+    async ({ label, npub, relayUrl }) => {
+      const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
+      const response = await fetch("/api/profiles", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": session.token },
+        body: JSON.stringify({
+          label,
+          npub,
+          signer: { kind: "nip07" },
+          criteriaPath: "criteria/demo.md",
+          relays: [relayUrl],
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+    },
+    { label, npub, relayUrl },
+  );
+}
+
+async function grab(page: Page, name: string) {
+  const dir = screenshotDir();
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  const width = page.viewportSize()?.width ?? 1440;
+  for (const theme of ["light", "dark"] as const) {
+    await setScheme(page, theme);
+    await page.screenshot({ path: `${dir}/${name}-${theme}-${width}.png`, animations: "disabled" });
+  }
+  await setScheme(page, "light");
+}
+
 test("profile setup covers the form, the opt-in, and removal", async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const relay = new LocalRelay();
   const url = await relay.start();
   const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
@@ -225,9 +264,11 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
 
   await page.getByLabel("Label").fill(`keep ${fixture} out`);
   await expect(page.getByLabel("Label")).toHaveValue("");
-  await expect(page.getByTestId("secret-alert")).toBeVisible();
+  const secretAlert = page.getByRole("alert").filter({ hasText: "private key" });
+  await expect(secretAlert).toBeVisible();
+  await expect(secretAlert).toContainText("private key");
   await expect(page.getByLabel("Label")).toBeFocused();
-  const secretPaint = await page.getByTestId("secret-alert").evaluate((node) => {
+  const secretPaint = await secretAlert.evaluate((node) => {
     const probe = document.createElement("span");
     document.body.append(probe);
     probe.style.color = "var(--color-danger-fg)";
@@ -263,23 +304,27 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await shots(page, "bunker-revealed");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
   await expect(page.getByRole("radio", { name: "Browser signer (NIP-07)" })).toBeFocused();
-  await expect(page.getByTestId("nip65-switch")).not.toBeChecked();
+  const nip65 = page.locator("#nip65-switch");
+  const publicRelays = page.locator("#public-switch");
+  await expect(nip65).not.toBeChecked();
   await shots(page, "nip65-off");
-  await page.getByTestId("nip65-switch").click();
-  await expect(page.getByTestId("nip65-switch")).toBeChecked();
+  await nip65.click();
+  await expect(nip65).toBeChecked();
   await shots(page, "nip65-on");
-  await page.getByTestId("nip65-switch").click();
-  await expect(page.getByTestId("nip65-switch")).not.toBeChecked();
+  await nip65.click();
+  await expect(nip65).not.toBeChecked();
 
-  await page.getByTestId("public-switch").click();
-  await expect(page.getByTestId("public-switch")).not.toBeChecked();
+  await publicRelays.click();
+  await expect(publicRelays).not.toBeChecked();
   await expect(page.getByText(`Allow public relays for Desk?`)).toBeVisible();
   await shots(page, "opt-in-sheet", "sheet");
   await page.getByRole("button", { name: "Keep them off" }).click();
-  await expect(page.getByTestId("public-switch")).not.toBeChecked();
-  await page.getByTestId("public-switch").click();
+  await expect(publicRelays).not.toBeChecked();
+  await expect(publicRelays).toBeFocused();
+  await publicRelays.click();
   await page.getByRole("button", { name: "Allow public relays" }).click();
-  await expect(page.getByTestId("public-switch")).toBeChecked();
+  await expect(publicRelays).toBeChecked();
+  await expect(publicRelays).toBeFocused();
   await page.getByRole("textbox", { name: "Relay", exact: true }).fill("wss://relay.example");
   await page.getByTestId("add-relay").click();
   await expect(page.getByText("Public", { exact: true })).toBeVisible();
@@ -299,7 +344,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   expect(badgePaint.color).toBe(badgePaint.fg);
   expect(badgePaint.background).toBe(badgePaint.bg);
   await shots(page, "public-relay");
-  await page.getByTestId("public-switch").click();
+  await page.getByRole("switch", { name: "Allow public relays" }).click();
   await expect(page.getByText("Off: public relays not allowed")).toBeVisible();
   await shots(page, "public-off");
   await page.getByRole("button", { name: "Remove" }).click();
@@ -352,6 +397,9 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   expect(addChrome.shadow).not.toBe("none");
   expect(addChrome.background).toBe(addChrome.surface);
   expect(addChrome.color).toBe(addChrome.text);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const listWidth = await page.getByTestId("profile-list").evaluate((node) => Math.round(node.getBoundingClientRect().width));
+  expect(listWidth).toBe(280);
   await shots(page, "settings-list", "page");
   await page.setViewportSize({ width: 390, height: 844 });
   if ((await page.getByTestId("profile-pane").count()) === 0) await page.getByTestId("profile-row-desk").click();
@@ -372,6 +420,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await expect(page.getByText("This profile has no queued or signed notes.")).toBeVisible();
   await shots(page, "remove-empty", "sheet");
   await page.getByRole("button", { name: "Keep it" }).click();
+  await expect(page.getByTestId("remove-profile")).toBeFocused();
 
   const waiting = await page.evaluate(async (profileId) => {
     const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
@@ -414,10 +463,50 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("remove-profile").click();
   await expect(page.getByText("This discards 1 queued or signed note for this profile.")).toBeVisible();
   await shots(page, "remove-notes", "sheet");
+  await grab(page, "remove-one-sheet");
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+  await expect(page.locator("#section-title")).toBeFocused();
+  await grab(page, "remove-one-after");
   await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await shots(page, "first-run-return");
+
+  await emptyProfiles(page);
+  await createProfile(page, "Desk", signer.npub, url);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await page.getByTestId("profile").click();
+  await page.getByTestId("manage-profiles").click();
+  await page.getByTestId("profile-row-desk").click();
+  await page.getByTestId("remove-profile").click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await grab(page, "remove-one-sheet");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+  await expect(page.locator("#section-title")).toBeFocused();
+  await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+  await grab(page, "remove-one-after");
+
+  for (const width of [1440, 390] as const) {
+    await emptyProfiles(page);
+    await createProfile(page, "Desk", signer.npub, url);
+    await createProfile(page, "Field", other.npub, url);
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.reload();
+    await page.getByTestId("profile").click();
+    await page.getByTestId("manage-profiles").click();
+    if (width === 390) await page.getByTestId("profile-row-desk").click();
+    await page.getByTestId("remove-profile").click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await grab(page, "remove-two-sheet");
+    await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+    await expect(page.locator("#section-title")).toBeFocused();
+    await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
+    await grab(page, "remove-two-after");
+  }
+  await emptyProfiles(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
 
   await page.getByLabel("Label").fill("Other");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
@@ -438,10 +527,186 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByLabel("Criteria file").fill("criteria/demo.md");
   await page.getByTestId("save-profile").click();
   await expect(page.getByText(`This npub already has a profile: Other.`)).toBeVisible();
+  await settle(page);
   await shots(page, "error-duplicate");
   await axe(page, "settings");
   await relay.stop();
 });
+
+test("the settings list keeps the current profile in full ink", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  const first = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  const second = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  await page.goto("/");
+  await emptyProfiles(page);
+  await page.evaluate(
+    async ({ firstNpub, secondNpub, relayUrl }) => {
+      const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
+      const headers = { "content-type": "application/json", "x-csrf-token": session.token };
+      for (const [label, npub] of [["Desk", firstNpub], ["Field", secondNpub]] as const) {
+        await fetch("/api/profiles", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            label,
+            npub,
+            signer: { kind: "nip07" },
+            criteriaPath: "criteria/demo.md",
+            relays: [relayUrl],
+          }),
+        });
+      }
+    },
+    { firstNpub: first.npub, secondNpub: second.npub, relayUrl: url },
+  );
+  await page.reload();
+  await page.getByTestId("profile").click();
+  await page.getByTestId("manage-profiles").click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await dismissToast(page);
+  const listWidth = await page.getByTestId("profile-list").evaluate((node) => Math.round(node.getBoundingClientRect().width));
+  expect(listWidth).toBe(280);
+  const rowPaint = await page.getByTestId("profile-list").evaluate((list) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--color-text)";
+    const ink = getComputedStyle(probe).color;
+    probe.style.color = "var(--color-muted)";
+    const muted = getComputedStyle(probe).color;
+    probe.remove();
+    return [...list.querySelectorAll<HTMLElement>(".profile-row")].map((row) => {
+      const style = getComputedStyle(row);
+      return { current: row.classList.contains("is-current"), weight: style.fontWeight, color: style.color, ink, muted };
+    });
+  });
+  expect(rowPaint).toHaveLength(2);
+  const current = rowPaint.find((row) => row.current);
+  const quietRow = rowPaint.find((row) => !row.current);
+  expect(current?.weight).toBe("600");
+  expect(current?.color).toBe(current?.ink);
+  expect(quietRow?.weight).toBe("400");
+  expect(quietRow?.color).toBe(quietRow?.muted);
+  const quiet = page.locator(".profile-row:not(.is-current)");
+  await quiet.hover();
+  const hover = await quiet.evaluate((node) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.backgroundColor = "var(--color-surface)";
+    const expected = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { background: getComputedStyle(node).backgroundColor, expected };
+  });
+  expect(hover.background).toBe(hover.expected);
+  const dir = screenshotDir();
+  if (dir) {
+    mkdirSync(dir, { recursive: true });
+    await page.locator(".profile-settings").screenshot({ path: `${dir}/settings-list-two-light-1440.png`, animations: "disabled" });
+  }
+  await relay.stop();
+});
+
+test("a pasted private key on a profile field uses a danger border and returns to the accent ring", async ({ page }) => {
+  await page.goto("/");
+  await emptyProfiles(page);
+  await page.reload();
+  const field = page.getByLabel("Label");
+  await field.fill(fixture);
+  await expect(page.getByRole("alert")).toContainText("private key");
+  await expect(field).toBeFocused();
+  const danger = await field.evaluate(readField);
+  expect(danger.durations.every((value) => Math.abs(value - 0.12) < 0.01)).toBe(true);
+  await expect.poll(async () => (await field.evaluate(readField)).borderColor).toBe(danger.danger);
+  await expect.poll(async () => (await field.evaluate(readField)).borderWidth).toBe("1px");
+  await expect.poll(async () => (await field.evaluate(readField)).outlineColor).toBe(danger.danger);
+  await expect.poll(async () => (await field.evaluate(readField)).outlineWidth).toBe("2px");
+  await field.blur();
+  const resting = await field.evaluate(readField);
+  expect(resting.borderColor).toBe(resting.danger);
+  expect(resting.outlineStyle).toBe("none");
+  await field.focus();
+  await secretShots(page, field, "secret-profile");
+  await field.fill("Desk");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await field.focus();
+  const cleared = await field.evaluate(readField);
+  expect(cleared.durations.every((value) => Math.abs(value - 0.12) < 0.01)).toBe(true);
+  await expect.poll(async () => {
+    const paint = await field.evaluate(readField);
+    return paint.outlineColor === paint.focus && paint.borderColor !== paint.danger && paint.outlineWidth === "2px";
+  }).toBe(true);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await field.fill(fixture);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect.poll(async () => (await field.evaluate(readField)).borderColor).toBe(danger.danger);
+  const reduced = await field.evaluate(readField);
+  expect(reduced.durations.every((value) => value <= 0.001)).toBe(true);
+});
+
+function readField(node: Element) {
+  const style = getComputedStyle(node);
+  const probe = document.createElement("span");
+  document.body.append(probe);
+  const colorOf = (name: string) => {
+    probe.style.color = `var(${name})`;
+    return getComputedStyle(probe).color;
+  };
+  const durations = style.transitionDuration.split(",").map((part) => {
+    const text = part.trim();
+    if (text.endsWith("ms")) return Number.parseFloat(text) / 1000;
+    return Number.parseFloat(text);
+  });
+  const paint = {
+    borderColor: style.borderTopColor,
+    borderWidth: style.borderTopWidth,
+    outlineColor: style.outlineColor,
+    outlineWidth: style.outlineWidth,
+    outlineStyle: style.outlineStyle,
+    durations,
+    danger: colorOf("--color-danger-fg"),
+    focus: colorOf("--color-focus"),
+  };
+  probe.remove();
+  return paint;
+}
+
+async function shotAround(page: Page, field: ReturnType<Page["locator"]>, path: string) {
+  const box = await field.boundingBox();
+  if (!box) return;
+  const pad = 12;
+  await page.screenshot({
+    path,
+    animations: "disabled",
+    clip: {
+      x: Math.max(0, box.x - pad),
+      y: Math.max(0, box.y - pad),
+      width: box.width + pad * 2,
+      height: box.height + pad * 2,
+    },
+  });
+}
+
+async function secretShots(page: Page, field: ReturnType<Page["locator"]>, name: string) {
+  const dir = screenshotDir();
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  for (const theme of ["light", "dark"] as const) {
+    for (const width of [1440, 390]) {
+      await setScheme(page, theme);
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await field.focus();
+      await shotAround(page, field, `${dir}/${name}-focused-${theme}-${width}.png`);
+      await field.blur();
+      await shotAround(page, field, `${dir}/${name}-unfocused-${theme}-${width}.png`);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setScheme(page, "light");
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("--motion-duration-fast");
+    document.documentElement.style.removeProperty("--motion-duration-base");
+  });
+}
 
 test("a bunker link is masked and the secret is not in the page", async ({ page }) => {
   const secret = "pairing-secret-value";

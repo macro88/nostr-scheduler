@@ -5,10 +5,10 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz
-  '@macro88/theme-nostr': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz
-  '@macro88/tokens': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz
-  '@macro88/ui': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz
+  '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz
+  '@macro88/theme-nostr': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz
+  '@macro88/tokens': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz
+  '@macro88/ui': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz
 
 importers:
 
@@ -18,14 +18,17 @@ importers:
         specifier: ^2.1.6
         version: 2.1.6(hono@4.13.17)
       '@macro88/motion':
-        specifier: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz
-        version: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz
+        specifier: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz
+        version: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz
       '@macro88/theme-nostr':
-        specifier: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz
-        version: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz
+        specifier: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz
+        version: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz
+      '@macro88/tokens':
+        specifier: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz
+        version: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz
       '@macro88/ui':
-        specifier: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz
-        version: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz
+        version: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@napi-rs/keyring':
         specifier: ^2.1.2
         version: 2.1.2
@@ -242,21 +245,21 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@macro88/motion@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz':
-    resolution: {integrity: sha512-oku4nZ0QypZ1paypI7tOM4T1OuUcZoWANg8JBFtXry3Ol32nhuqPm3SaZltHol8uzzfVxgqhqHCvi2mKFOviPA==, tarball: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz}
-    version: 0.1.0
+  '@macro88/motion@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz':
+    resolution: {integrity: sha512-e5/CaCTiRGgJqR/lSWgo1H5jT85OQyNAot8t/kdY8OCJKP6uvrzPezBN6lUc+cr2ftTqMh9Fyn9ZXhRJg5ZH1Q==, tarball: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz}
+    version: 0.3.0
 
-  '@macro88/theme-nostr@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz':
-    resolution: {integrity: sha512-KoKNN/crt3YyPfNcLTdtMU+odUfvOx0C6WVTHRqacfd3WgHF2MQHUnPoVF6jFEC/4rFcYWG95Enbk4YK4kX1TQ==, tarball: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz}
-    version: 0.1.0
+  '@macro88/theme-nostr@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz':
+    resolution: {integrity: sha512-3H2o8U9jOIH5Rpwis40ZzgT7bACa/Mo6MfDTrrr7N4XAp/4rRAZcKgYp/l65jGZ/1erfrgWjmx7sfEhq0RVjOQ==, tarball: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz}
+    version: 0.3.0
 
-  '@macro88/tokens@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz':
-    resolution: {integrity: sha512-WX+fomgEtibS1nJSKwh07rj4n+LWSOzYr0sylz0I8ecjxv+dYaEP/In/GOjlOzDw95uD3AMltrH7uw1KymJR2w==, tarball: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz}
-    version: 0.1.0
+  '@macro88/tokens@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz':
+    resolution: {integrity: sha512-lT8eDBoBB2rY0U7oiWwyBKQtNZo+2CMUvRn45mYF9X6pnSBQUqNW4I5V/6xlJD784XvFzir8STIiZ9LT3BwDAg==, tarball: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz}
+    version: 0.3.0
 
-  '@macro88/ui@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz':
-    resolution: {integrity: sha512-b/VCe3lvB7qaG7Q6Tpg0r9LrIp2ksrtuhTtbbUCdXSyT22Ui9v3VKDFLVYGgrZ7GNOu6L0QahwmR5O1HJetyjQ==, tarball: https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz}
-    version: 0.1.0
+  '@macro88/ui@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz':
+    resolution: {integrity: sha512-KlzQ4G1tOZFWAz3FROb7a/4ihScJVY5zDc/Mfjnt10BBA0JKN1Q+xZOIYgRo/MjVQOhtrRq9ipvxM6RVKtmddQ==, tarball: https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz}
+    version: 0.3.0
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -555,6 +558,19 @@ packages:
       '@types/react-dom':
         optional: true
 
+  '@radix-ui/react-radio-group@1.5.1':
+    resolution: {integrity: sha512-QbyVT1ddnjqB9H+CUYKkNWdU9fIK3QHCYtjf7mS6ekSqiuXkWtWn5UZW9mhA8qtl3vrVyIsmR9gePstAtKrqkw==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+
   '@radix-ui/react-roving-focus@1.2.1':
     resolution: {integrity: sha512-UwraORzVUeEPMclhO1p0vz0qI+TbdDLO9i+FiOqhJyHKwdpCRCck9yVEscUnAMIzCiuNoQa8D4A9bIpOPXGt6Q==}
     peerDependencies:
@@ -588,6 +604,19 @@ packages:
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
     peerDependenciesMeta:
       '@types/react':
+        optional: true
+
+  '@radix-ui/react-switch@1.4.1':
+    resolution: {integrity: sha512-NpBGwc40rY02ZmSvuyeKk0Bvc8ZsNeTMi4qHvJ+ZH4EiYCv0zIXEgdCW4bVdzgIUeP9xxbLJSxKOUfqITYNmkA==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
         optional: true
 
   '@radix-ui/react-tabs@1.2.1':
@@ -2030,21 +2059,23 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@macro88/motion@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz': {}
+  '@macro88/motion@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz': {}
 
-  '@macro88/theme-nostr@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-theme-nostr-0.1.0.tgz':
+  '@macro88/theme-nostr@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-theme-nostr-0.3.0.tgz':
     dependencies:
-      '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz
+      '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz
 
-  '@macro88/tokens@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz': {}
+  '@macro88/tokens@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz': {}
 
-  '@macro88/ui@https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-ui-0.1.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@macro88/ui@https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-ui-0.3.0.tgz(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-motion-0.1.0.tgz
-      '@macro88/tokens': https://github.com/macro88/design-system/releases/download/v0.1.0/macro88-tokens-0.1.0.tgz
+      '@macro88/motion': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-motion-0.3.0.tgz
+      '@macro88/tokens': https://github.com/macro88/design-system/releases/download/v0.3.0/macro88-tokens-0.3.0.tgz
       '@radix-ui/react-alert-dialog': 1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-radio-group': 1.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@radix-ui/react-select': 2.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@radix-ui/react-slot': 1.5.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-switch': 1.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@radix-ui/react-tabs': 1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       motion: 12.23.24(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react: 19.3.1
@@ -2291,6 +2322,23 @@ snapshots:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
+  '@radix-ui/react-radio-group@1.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@radix-ui/primitive': 1.2.0
+      '@radix-ui/react-compose-refs': 1.1.5(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-context': 1.3.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-direction': 1.2.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-presence': 1.1.11(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-primitive': 2.2.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-roving-focus': 1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-use-controllable-state': 1.3.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-use-size': 1.1.5(@types/react@19.3.0)(react@19.3.1)
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+    optionalDependencies:
+      '@types/react': 19.3.0
+      '@types/react-dom': 19.3.0(@types/react@19.3.0)
+
   '@radix-ui/react-roving-focus@1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@radix-ui/primitive': 1.2.0
@@ -2345,6 +2393,20 @@ snapshots:
       react: 19.3.1
     optionalDependencies:
       '@types/react': 19.3.0
+
+  '@radix-ui/react-switch@1.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@radix-ui/primitive': 1.2.0
+      '@radix-ui/react-compose-refs': 1.1.5(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-context': 1.3.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-primitive': 2.2.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-use-controllable-state': 1.3.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-use-size': 1.1.5(@types/react@19.3.0)(react@19.3.1)
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+    optionalDependencies:
+      '@types/react': 19.3.0
+      '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
   '@radix-ui/react-tabs@1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
