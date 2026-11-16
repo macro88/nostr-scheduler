@@ -205,8 +205,41 @@ async function emptyProfiles(page: Page) {
   });
 }
 
+async function createProfile(page: Page, label: string, npub: string, relayUrl: string) {
+  await page.evaluate(
+    async ({ label, npub, relayUrl }) => {
+      const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
+      const response = await fetch("/api/profiles", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": session.token },
+        body: JSON.stringify({
+          label,
+          npub,
+          signer: { kind: "nip07" },
+          criteriaPath: "criteria/demo.md",
+          relays: [relayUrl],
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+    },
+    { label, npub, relayUrl },
+  );
+}
+
+async function grab(page: Page, name: string) {
+  const dir = screenshotDir();
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  const width = page.viewportSize()?.width ?? 1440;
+  for (const theme of ["light", "dark"] as const) {
+    await setScheme(page, theme);
+    await page.screenshot({ path: `${dir}/${name}-${theme}-${width}.png`, animations: "disabled" });
+  }
+  await setScheme(page, "light");
+}
+
 test("profile setup covers the form, the opt-in, and removal", async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const relay = new LocalRelay();
   const url = await relay.start();
   const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
@@ -231,7 +264,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
 
   await page.getByLabel("Label").fill(`keep ${fixture} out`);
   await expect(page.getByLabel("Label")).toHaveValue("");
-  const secretAlert = page.getByRole("alert");
+  const secretAlert = page.getByRole("alert").filter({ hasText: "private key" });
   await expect(secretAlert).toBeVisible();
   await expect(secretAlert).toContainText("private key");
   await expect(page.getByLabel("Label")).toBeFocused();
@@ -430,10 +463,50 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("remove-profile").click();
   await expect(page.getByText("This discards 1 queued or signed note for this profile.")).toBeVisible();
   await shots(page, "remove-notes", "sheet");
+  await grab(page, "remove-one-sheet");
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+  await expect(page.locator("#section-title")).toBeFocused();
+  await grab(page, "remove-one-after");
   await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await shots(page, "first-run-return");
+
+  await emptyProfiles(page);
+  await createProfile(page, "Desk", signer.npub, url);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await page.getByTestId("profile").click();
+  await page.getByTestId("manage-profiles").click();
+  await page.getByTestId("profile-row-desk").click();
+  await page.getByTestId("remove-profile").click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await grab(page, "remove-one-sheet");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+  await expect(page.locator("#section-title")).toBeFocused();
+  await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+  await grab(page, "remove-one-after");
+
+  for (const width of [1440, 390] as const) {
+    await emptyProfiles(page);
+    await createProfile(page, "Desk", signer.npub, url);
+    await createProfile(page, "Field", other.npub, url);
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.reload();
+    await page.getByTestId("profile").click();
+    await page.getByTestId("manage-profiles").click();
+    if (width === 390) await page.getByTestId("profile-row-desk").click();
+    await page.getByTestId("remove-profile").click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await grab(page, "remove-two-sheet");
+    await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
+    await expect(page.locator("#section-title")).toBeFocused();
+    await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
+    await grab(page, "remove-two-after");
+  }
+  await emptyProfiles(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
 
   await page.getByLabel("Label").fill("Other");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
@@ -454,6 +527,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByLabel("Criteria file").fill("criteria/demo.md");
   await page.getByTestId("save-profile").click();
   await expect(page.getByText(`This npub already has a profile: Other.`)).toBeVisible();
+  await settle(page);
   await shots(page, "error-duplicate");
   await axe(page, "settings");
   await relay.stop();
@@ -518,7 +592,7 @@ test("the settings list keeps the current profile in full ink", async ({ page })
   const hover = await quiet.evaluate((node) => {
     const probe = document.createElement("span");
     document.body.append(probe);
-    probe.style.background = "color-mix(in srgb, var(--color-text) 6%, var(--color-bg))";
+    probe.style.backgroundColor = "var(--color-surface)";
     const expected = getComputedStyle(probe).backgroundColor;
     probe.remove();
     return { background: getComputedStyle(node).backgroundColor, expected };

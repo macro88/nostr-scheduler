@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { fieldCollapse, fieldExpand, transitionsReduced } from "@macro88/theme-nostr";
-import { Badge, Button, ConfirmSheet, Input, RadioGroup, Switch } from "@macro88/ui";
+import { Badge, Button, ConfirmSheet, FormMessage, Input, RadioGroup, Switch } from "@macro88/ui";
 import { api, type Profile } from "../api";
 import { containsPrivateKey } from "../../../src/domain/private-key.js";
 import { isNpub, shortNpub } from "../npub";
@@ -266,8 +266,10 @@ export function ProfileForm({
       onSaved(saved.id);
     } catch (error) {
       const message = plain(error);
-      if (message.includes("npub") || message.includes("hex") || message.includes("profile:")) setNpubError(message);
-      else setFormError(message);
+      if (message.includes("npub") || message.includes("hex") || message.includes("profile:")) {
+        setNpubError(message);
+        setNpubOpen(true);
+      } else setFormError(message);
     } finally {
       setPending(false);
     }
@@ -383,7 +385,7 @@ export function ProfileForm({
                 className="mono"
                 label="npub"
                 value={npub}
-                error={secretField === "npub" ? secretWarning : undefined}
+                error={secretField === "npub" ? secretWarning : npubError || undefined}
                 onChange={(event) => {
                   take("npub", event.target.value, (next) => {
                     setNpub(next);
@@ -407,7 +409,6 @@ export function ProfileForm({
             </motion.div>
           )}
         </AnimatePresence>
-        {npubError ? <p className="field-note">{npubError}</p> : null}
         <Input
           className="mono"
           label="Criteria file"
@@ -505,7 +506,7 @@ export function ProfileForm({
                 </Badge>
               ) : null}
               {item.public && !allowPublic ? <span className="muted">Off: public relays not allowed</span> : null}
-              <Button type="button" variant="ghost" onClick={() => setRelays((current) => current.filter((row) => row.url !== item.url))}>
+              <Button type="button" variant="ghost" aria-label={`Remove ${item.url}`} onClick={() => setRelays((current) => current.filter((row) => row.url !== item.url))}>
                 Remove
               </Button>
               {item.unreachable ? (
@@ -557,7 +558,7 @@ export function ProfileForm({
           <p className="field-note">Off keeps every note on relays you run.</p>
         </div>
       </section>
-      {formError ? <p className="field-note">{formError}</p> : null}
+      {formError ? <FormMessage tone="error">{formError}</FormMessage> : null}
       <div className="profile-actions">
         <Button type="submit" variant="primary" data-testid="save-profile" disabled={pending || Boolean(secretField)}>
           {mode === "create" ? "Save profile" : "Save changes"}
@@ -565,9 +566,7 @@ export function ProfileForm({
         {mode === "edit" ? (
           <Button
             type="button"
-            variant="ghost"
-            className="danger-text"
-            style={{ color: "var(--color-danger-fg)" }}
+            variant="danger"
             data-testid="remove-profile"
             onClick={(event) => {
               rememberOpener(event.currentTarget);
