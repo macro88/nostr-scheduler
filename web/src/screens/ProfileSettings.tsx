@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@macro88/ui";
 import type { Profile } from "../api";
 import { shortNpub } from "../npub";
-import { detailPop, detailPopReduced, detailPush, detailPushReduced } from "../profile-motion";
+import { detailPop, detailPush, transitionsReduced } from "@macro88/theme-nostr";
 import { ProfileForm, SheetHostContext } from "./ProfileForm";
 
 function useNarrow(): boolean {
@@ -48,8 +48,8 @@ export function ProfileSettings({
   const [travel, setTravel] = useState(false);
   const [sheetHost, setSheetHost] = useState<HTMLDivElement | null>(null);
   const chosen = selected === "new" ? undefined : profiles.find((item) => item.id === selected) ?? profiles[0];
-  const push = reduced ? detailPushReduced : detailPush;
-  const pop = reduced ? detailPopReduced : detailPop;
+  const push = reduced ? transitionsReduced.detailPush : detailPush;
+  const pop = reduced ? transitionsReduced.detailPop : detailPop;
 
   useEffect(() => {
     if (pendingId && profiles.some((item) => item.id === pendingId)) {

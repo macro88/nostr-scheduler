@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Badge, Button, ConfirmSheet, Input } from "@macro88/ui";
+import { fieldCollapse, fieldExpand, transitionsReduced } from "@macro88/theme-nostr";
+import { Badge, Button, ConfirmSheet, Input, RadioGroup, Switch } from "@macro88/ui";
 import { api, type Profile } from "../api";
 import { containsPrivateKey } from "../../../src/domain/private-key.js";
 import { isNpub, shortNpub } from "../npub";
-import { fieldCollapse, fieldCollapseReduced, fieldExpand, fieldExpandReduced } from "../profile-motion";
 import { notifySuccess } from "../toasts";
 
 export const SheetHostContext = createContext<HTMLElement | null>(null);
@@ -13,8 +13,55 @@ export const SheetHostContext = createContext<HTMLElement | null>(null);
 const secretWarning =
   "That's a private key (nsec). This app never needs it. Paste your npub, and keep your nsec in your signer.";
 
+const signerOptions = [
+  { value: "nip07", label: "Browser signer (NIP-07)" },
+  { value: "nip46", label: "Bunker (NIP-46)" },
+  { value: "nip55", label: "Android signer (NIP-55)" },
+] as const;
+
 type SecretField = "label" | "npub" | "criteria" | "bunker" | "relay" | null;
-type SignerKind = "" | "nip07" | "nip46" | "nip55";
+type SignerKind = "" | (typeof signerOptions)[number]["value"];
+type FieldVariant =
+  | typeof fieldCollapse
+  | typeof fieldExpand
+  | typeof transitionsReduced.fieldCollapse
+  | typeof transitionsReduced.fieldExpand;
+
+function fieldBox(container: FieldVariant["container"]): { height?: number | "auto" } {
+  if ("height" in container) return { height: container.height };
+  return {};
+}
+
+function openFrames(expand: FieldVariant, collapse: FieldVariant) {
+  return {
+    initial: { opacity: 0, ...fieldBox(expand.container) },
+    animate: {
+      opacity: expand.incoming.opacity,
+      ...fieldBox(expand.container),
+      transition: expand.incoming.transition,
+    },
+    exit: {
+      opacity: collapse.outgoing.opacity,
+      ...fieldBox(collapse.container),
+      transition: {
+        opacity: collapse.outgoing.transition,
+        ...("height" in collapse.container ? { height: collapse.container.transition } : {}),
+      },
+    },
+  };
+}
+
+function settledFrames(expand: FieldVariant, collapse: FieldVariant) {
+  return {
+    initial: { opacity: 0 },
+    animate: {
+      opacity: collapse.incoming.opacity,
+      ...fieldBox(expand.container),
+      transition: collapse.incoming.transition,
+    },
+    exit: { opacity: expand.outgoing.opacity, transition: expand.outgoing.transition },
+  };
+}
 type RelayRow = { url: string; public: boolean; unreachable: boolean };
 
 function loopbackUrl(value: string): boolean {
@@ -59,8 +106,10 @@ export function ProfileForm({
 }) {
   const sheetHost = useContext(SheetHostContext);
   const reduced = useReduced();
-  const collapse = reduced ? fieldCollapseReduced : fieldCollapse;
-  const expand = reduced ? fieldExpandReduced : fieldExpand;
+  const collapse = reduced ? transitionsReduced.fieldCollapse : fieldCollapse;
+  const expand = reduced ? transitionsReduced.fieldExpand : fieldExpand;
+  const opening = openFrames(expand, collapse);
+  const settledMotion = settledFrames(expand, collapse);
   const [label, setLabel] = useState(profile?.label ?? "");
   const [npub, setNpub] = useState(profile?.npub ?? "");
   const [npubOpen, setNpubOpen] = useState(!profile?.npub);
@@ -84,7 +133,7 @@ export function ProfileForm({
   const [pending, setPending] = useState(false);
   const bunkerWrap = useRef<HTMLDivElement>(null);
   const npubWrap = useRef<HTMLDivElement>(null);
-  const radioRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const opener = useRef<HTMLElement | null>(null);
   const changeRef = useRef<HTMLButtonElement>(null);
   const pairAgainRef = useRef<HTMLButtonElement>(null);
   const prevKind = useRef(kind);
@@ -94,7 +143,10 @@ export function ProfileForm({
 
   useEffect(() => {
     if (kind === "nip46" && prevKind.current !== "nip46" && !settled) bunkerWrap.current?.querySelector("input")?.focus();
-    if (prevKind.current === "nip46" && kind !== "nip46" && kind) radioRefs.current[kind]?.focus();
+    if (prevKind.current === "nip46" && kind !== "nip46" && kind) {
+      const index = signerOptions.findIndex((option) => option.value === kind);
+      document.getElementById(`signer-kind-option-${index}`)?.focus();
+    }
     prevKind.current = kind;
   }, [kind, settled]);
 
@@ -261,11 +313,24 @@ export function ProfileForm({
       ? "This profile has no queued or signed notes."
       : `This discards ${count} queued or signed ${count === 1 ? "note" : "notes"} for this profile. They haven't been published and can't be recovered.`;
 
+  function rememberOpener(node: HTMLElement | null) {
+    opener.current = node;
+  }
+
+  function restoreOpener() {
+    const node = opener.current;
+    if (!node?.isConnected) return;
+    window.requestAnimationFrame(() => node.focus());
+  }
+
   const sheets = (
     <>
       <ConfirmSheet
         open={askPublic}
-        onOpenChange={setAskPublic}
+        onOpenChange={(open) => {
+          setAskPublic(open);
+          if (!open) restoreOpener();
+        }}
         title={`Allow public relays for ${label.trim() || "this profile"}?`}
         description="Notes scheduled for this profile can then go to public relays, where anyone can read them. A deletion request later may not remove them."
         confirmLabel="Allow public relays"
@@ -274,7 +339,10 @@ export function ProfileForm({
       />
       <ConfirmSheet
         open={askRemove}
-        onOpenChange={setAskRemove}
+        onOpenChange={(open) => {
+          setAskRemove(open);
+          if (!open) restoreOpener();
+        }}
         title={`Remove ${label.trim() || "this profile"}?`}
         description={removeCopy}
         confirmLabel="Remove profile"
@@ -305,28 +373,17 @@ export function ProfileForm({
           label="Label"
           hint="Only you see this."
           value={label}
-          aria-invalid={secretField === "label" || undefined}
+          error={secretField === "label" ? secretWarning : undefined}
           onChange={(event) => take("label", event.target.value, setLabel)}
         />
-        {secretField === "label" ? <SecretLine /> : null}
         <AnimatePresence mode="sync" initial={false}>
           {npubOpen ? (
-            <motion.div
-              key="npub-open"
-              ref={npubWrap}
-              initial={{ opacity: 0, height: expand.container.height }}
-              animate={{ opacity: expand.incoming.opacity, height: "auto", transition: expand.incoming.transition }}
-              exit={{
-                opacity: collapse.outgoing.opacity,
-                height: collapse.container.height,
-                transition: { opacity: collapse.outgoing.transition, height: collapse.container.transition },
-              }}
-            >
+            <motion.div key="npub-open" ref={npubWrap} initial={opening.initial} animate={opening.animate} exit={opening.exit}>
               <Input
                 className="mono"
                 label="npub"
                 value={npub}
-                aria-invalid={secretField === "npub" || Boolean(npubError) || undefined}
+                error={secretField === "npub" ? secretWarning : undefined}
                 onChange={(event) => {
                   take("npub", event.target.value, (next) => {
                     setNpub(next);
@@ -337,13 +394,7 @@ export function ProfileForm({
               />
             </motion.div>
           ) : (
-            <motion.div
-              key="npub-settled"
-              className="npub-settled"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: collapse.incoming.opacity, height: "auto", transition: collapse.incoming.transition }}
-              exit={{ opacity: expand.outgoing.opacity, transition: expand.outgoing.transition }}
-            >
+            <motion.div key="npub-settled" className="npub-settled" initial={settledMotion.initial} animate={settledMotion.animate} exit={settledMotion.exit}>
               <p className="mono" data-testid="npub-settled" aria-live="polite">
                 {shortNpub(npub)}
               </p>
@@ -356,67 +407,53 @@ export function ProfileForm({
             </motion.div>
           )}
         </AnimatePresence>
-        {secretField === "npub" ? <SecretLine /> : null}
         {npubError ? <p className="field-note">{npubError}</p> : null}
         <Input
           className="mono"
           label="Criteria file"
           hint="A path inside the data directory."
           value={criteria}
-          aria-invalid={secretField === "criteria" || undefined}
+          error={secretField === "criteria" ? secretWarning : undefined}
           onChange={(event) => take("criteria", event.target.value, setCriteria)}
           onBlur={() => void lookAtCriteria(criteria)}
         />
-        {secretField === "criteria" ? <SecretLine /> : null}
         {criteriaMissing ? <p className="field-note">No file at that path in the data directory.</p> : null}
       </section>
       <section aria-labelledby="signer-section">
         <h2 id="signer-section">Signer</h2>
-        {/* waiting for the library RadioGroup */}
-        <fieldset className="signer-choice">
-          <legend>Signer kind</legend>
-          {(
-            [
-              ["nip07", "Browser signer (NIP-07)"],
-              ["nip46", "Bunker (NIP-46)"],
-              ["nip55", "Android signer (NIP-55)"],
-            ] as const
-          ).map(([value, text]) => (
-            <label key={value}>
-              <input
-                ref={(node) => {
-                  radioRefs.current[value] = node;
-                }}
-                type="radio"
-                name="signer-kind"
-                value={value}
-                checked={kind === value}
-                data-testid={`signer-${value}`}
-                onChange={() => setKind(value)}
-              />
-              {text}
-            </label>
-          ))}
-        </fieldset>
-        {kind === "nip46" ? (
-          <div data-testid="bunker-field">
-            {settled ? (
-              <p className="mono" data-testid="bunker-masked">
-                {masked}
-              </p>
-            ) : (
-            <div ref={bunkerWrap}>
-              <Input
-                className="mono"
-                label="Bunker link"
-                placeholder="bunker://"
-                value={bunker}
-                aria-invalid={secretField === "bunker" || undefined}
-                onChange={(event) => take("bunker", event.target.value, setBunker)}
-              />
-            </div>
-            )}
-            {secretField === "bunker" ? <SecretLine /> : null}
+        <div className="signer-choice">
+          <RadioGroup
+            id="signer-kind"
+            label="Signer kind"
+            name="signer-kind"
+            options={signerOptions}
+            value={kind}
+            onValueChange={(value) => setKind(value as SignerKind)}
+          />
+        </div>
+        <AnimatePresence mode="sync" initial={false}>
+          {kind === "nip46" ? (
+          <motion.div key="bunker-field" data-testid="bunker-field" initial={opening.initial} animate={opening.animate} exit={opening.exit}>
+            <AnimatePresence mode="sync" initial={false}>
+              {settled ? (
+                <motion.div key="bunker-paired" initial={settledMotion.initial} animate={settledMotion.animate} exit={settledMotion.exit}>
+                  <p className="mono" data-testid="bunker-masked">
+                    {masked}
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div key="bunker-open" ref={bunkerWrap} initial={opening.initial} animate={opening.animate} exit={opening.exit}>
+                  <Input
+                    className="mono"
+                    label="Bunker link"
+                    placeholder="bunker://"
+                    value={bunker}
+                    error={secretField === "bunker" ? secretWarning : undefined}
+                    onChange={(event) => take("bunker", event.target.value, setBunker)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
             <p className="bunker-status" data-testid="pair-state" aria-live="polite">
               {settled ? "Paired" : "Not paired"}
             </p>
@@ -451,8 +488,9 @@ export function ProfileForm({
                 Pair
               </Button>
             ) : null}
-          </div>
-        ) : null}
+          </motion.div>
+          ) : null}
+        </AnimatePresence>
       </section>
       <section aria-labelledby="relay-section">
         <h2 id="relay-section">Relays</h2>
@@ -486,45 +524,36 @@ export function ProfileForm({
             className="mono"
             label="Relay"
             value={relayDraft}
-            aria-invalid={secretField === "relay" || Boolean(relayError) || undefined}
+            error={secretField === "relay" ? secretWarning : undefined}
             onChange={(event) => take("relay", event.target.value, setRelayDraft)}
           />
           <Button type="button" variant="outline" data-testid="add-relay" onClick={addRelay}>
             Add relay
           </Button>
         </div>
-        {secretField === "relay" ? <SecretLine /> : null}
         {relayError ? (
           <p className="warn-line" data-testid="relay-warning">
             {relayError}
           </p>
         ) : null}
         <div className="switch-block">
-          {/* waiting for the library Switch */}
-          <label className="switch">
-            <input type="checkbox" role="switch" checked={readNip65} data-testid="nip65-switch" onChange={(event) => setReadNip65(event.target.checked)} />
-            Read this npub's relay list (NIP-65)
-          </label>
+          <Switch id="nip65-switch" label="Read this npub's relay list (NIP-65)" checked={readNip65} onCheckedChange={setReadNip65} />
           <p className="field-note">Turning this on contacts public relays to fetch your relay list. Public relays found there are listed but stay off unless you allow public relays.</p>
         </div>
         <div className="switch-block public-opt">
-          {/* waiting for the library Switch */}
-          <label className="switch">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={allowPublic}
-              data-testid="public-switch"
-              onChange={(event) => {
-                if (event.target.checked) {
-                  setAskPublic(true);
-                  return;
-                }
-                setAllowPublic(false);
-              }}
-            />
-            Allow public relays
-          </label>
+          <Switch
+            id="public-switch"
+            label="Allow public relays"
+            checked={allowPublic}
+            onCheckedChange={(checked) => {
+              rememberOpener(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+              if (checked) {
+                setAskPublic(true);
+                return;
+              }
+              setAllowPublic(false);
+            }}
+          />
           <p className="field-note">Off keeps every note on relays you run.</p>
         </div>
       </section>
@@ -534,20 +563,22 @@ export function ProfileForm({
           {mode === "create" ? "Save profile" : "Save changes"}
         </Button>
         {mode === "edit" ? (
-          <Button type="button" variant="ghost" className="danger-text" style={{ color: "var(--color-danger-fg)" }} data-testid="remove-profile" onClick={() => setAskRemove(true)}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="danger-text"
+            style={{ color: "var(--color-danger-fg)" }}
+            data-testid="remove-profile"
+            onClick={(event) => {
+              rememberOpener(event.currentTarget);
+              setAskRemove(true);
+            }}
+          >
             Remove profile
           </Button>
         ) : null}
       </div>
       {sheetHost ? createPortal(sheets, sheetHost) : sheets}
     </form>
-  );
-}
-
-function SecretLine() {
-  return (
-    <p className="secret-line" role="alert" aria-live="assertive" data-testid="secret-alert">
-      {secretWarning}
-    </p>
   );
 }

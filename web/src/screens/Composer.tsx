@@ -134,6 +134,7 @@ export function Composer({ profile }: { profile: Profile }) {
             className="editor note-lg literata-reading"
             data-testid="note-text"
             aria-label="Note"
+            aria-invalid={blocked || undefined}
             aria-describedby={blocked ? "private-key-alert" : undefined}
             placeholder="Write a short note"
             value={note}
@@ -153,6 +154,7 @@ export function Composer({ profile }: { profile: Profile }) {
                 className="editor note-lg literata-reading"
                 data-testid="thread-part"
                 aria-label={index === 0 ? "Root post" : "Reply"}
+                aria-invalid={blocked || undefined}
                 aria-describedby={blocked ? "private-key-alert" : undefined}
                 placeholder={index === 0 ? "Root post" : "Reply"}
                 value={part}
@@ -192,6 +194,7 @@ export function Composer({ profile }: { profile: Profile }) {
               className="editor note-lg literata-reading"
               data-testid="reply-text"
               aria-label="Your reply"
+              aria-invalid={blocked || undefined}
               aria-describedby={blocked ? "private-key-alert" : undefined}
               placeholder="Your reply"
               value={reply}
