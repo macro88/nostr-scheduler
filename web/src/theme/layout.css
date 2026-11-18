@@ -1483,7 +1483,12 @@ select:focus-visible {
     flex-direction: column;
     gap: 0;
   }
-  .profile-setup h1 { margin-bottom: var(--space-16); }
+  .profile-setup h1 { margin-bottom: var(--space-8); }
+  .setup-progress { margin: 0 0 var(--space-16); }
+  .setup-progress span { color: var(--color-muted); font-weight: 400; }
+  .setup-progress [aria-current="step"] { color: var(--color-text); font-weight: 600; }
+  .setup-lead { margin-top: 0; }
+  .relay-settings { margin-top: var(--space-16); }
   .profile-setup section {
     border-top: 1px solid var(--color-border);
     padding: var(--space-20) 0;

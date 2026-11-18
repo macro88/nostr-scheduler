@@ -46,6 +46,12 @@ export const editSchema = z.object({
   draft: draftSchema,
 });
 
+export const manualDraftSchema = z.object({
+  profileId: z.string().min(1),
+  draft: draftSchema,
+  id: z.string().min(1).optional(),
+});
+
 export const composeSchema = z.object({
   profileId: z.string().min(1),
   draft: draftSchema,

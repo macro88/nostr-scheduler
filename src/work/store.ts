@@ -44,6 +44,15 @@ export function parseWorkItem(value: unknown): WorkItem {
   const id = suggestionId(String(value.id));
   const profile = profileId(String(value.profileId));
   const base = { id, profileId: profile };
+  if (value.status === "draft") {
+    return {
+      ...base,
+      status: "draft",
+      origin: "manual",
+      draft: parseDraft(value.draft),
+      createdAt: unixSeconds(Number(value.createdAt)),
+    };
+  }
   if (value.status === "suggestion" || value.status === "approved") {
     const draft = parseDraft(value.draft);
     const createdAt = unixSeconds(Number(value.createdAt));
@@ -255,6 +264,20 @@ export class WorkStore {
       this.insert(item);
       return item;
     });
+  }
+
+  saveManualDraft(args: { profile: Profile; draft: Draft; at: UnixSeconds }): WorkItem {
+    assertNoPrivateKey(args.draft);
+    const item: WorkItem = {
+      status: "draft",
+      origin: "manual",
+      id: suggestionId(`sug_${randomBytes(8).toString("hex")}`),
+      profileId: args.profile.id,
+      draft: args.draft,
+      createdAt: args.at,
+    };
+    this.insert(item);
+    return item;
   }
 
   get(id: SuggestionId): WorkItem {

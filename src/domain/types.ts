@@ -171,6 +171,15 @@ export type ReplyDraft = {
 
 export type Draft = NoteDraft | ThreadDraft | ReplyDraft;
 
+export type ManualDraft = {
+  readonly status: "draft";
+  readonly origin: "manual";
+  readonly id: SuggestionId;
+  readonly profileId: ProfileId;
+  readonly draft: Draft;
+  readonly createdAt: UnixSeconds;
+};
+
 export type Suggestion = {
   readonly status: "suggestion";
   readonly origin: "suggestion";
@@ -271,6 +280,7 @@ export type Discarded = {
 };
 
 export type WorkItem =
+  | ManualDraft
   | Suggestion
   | Approved
   | SignedWork

@@ -7,7 +7,7 @@ import { Calendar } from "./screens/Calendar";
 import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
 import { Log } from "./screens/Log";
-import { ProfileForm } from "./screens/ProfileForm";
+import { FirstRun } from "./screens/FirstRun";
 import { ProfileSettings } from "./screens/ProfileSettings";
 import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
@@ -25,6 +25,7 @@ export function App() {
   const [shortcuts, setShortcuts] = useState(() => readShortcutsEnabled(typeof localStorage === "undefined" ? null : localStorage));
   const [menuOpen, setMenuOpen] = useState(false);
   const [manage, setManage] = useState(false);
+  const [repair, setRepair] = useState(false);
   const profileButton = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const firstView = useRef(true);
@@ -128,7 +129,7 @@ export function App() {
   }, [menuOpen]);
 
   const ready = Boolean(profiles.data && profiles.data.length > 0);
-  if (!profiles.isPending && !ready) {
+  if (profiles.isPending && !profiles.data) {
     return (
       <>
         <Toaster />
@@ -138,14 +139,7 @@ export function App() {
           </div>
         </header>
         <main>
-          <ProfileForm
-            mode="create"
-            onSaved={(id) => {
-              setProfileId(id);
-              setView("compose");
-              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
-            }}
-          />
+          <p className="sr">Loading profiles</p>
         </main>
       </>
     );
@@ -157,6 +151,7 @@ export function App() {
       <header>
         <div className="brand-nav">
           <span className="wordmark">Scheduler</span>
+          {ready && !repair ? (
           <nav aria-label="Sections">
             {views.map((name, index) => (
               <button
@@ -171,19 +166,21 @@ export function App() {
               </button>
             ))}
           </nav>
+          ) : null}
         </div>
+        {ready && !repair ? (
         <div className="header-tools">
           <button
             ref={profileButton}
             type="button"
             className="profile"
             data-testid="profile"
-            aria-label={selected ? `Profile ${shortNpub(selected.pubkey)}` : "Profile"}
+            aria-label={selected ? `Profile ${selected.label}` : "Profile"}
             aria-haspopup="dialog"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((current) => !current)}
           >
-            {selected ? shortNpub(selected.pubkey) : "Profile"}
+            {selected ? selected.label : "Profile"}
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 4.5 6 8l3-3.5" />
             </svg>
@@ -200,7 +197,8 @@ export function App() {
                     aria-checked={profile.id === selected?.id}
                     onClick={() => setProfileId(profile.id)}
                   >
-                    {shortNpub(profile.pubkey)}
+                    {profile.label}
+                    <span className="mono"> {shortNpub(profile.pubkey)}</span>
                   </button>
                 ))}
               </div>
@@ -238,9 +236,32 @@ export function App() {
             </div>
           ) : null}
         </div>
+        ) : null}
       </header>
       <main>
-        {selected && manage ? (
+        {repair && selected ? (
+          <FirstRun
+            profile={selected}
+            onExit={() => setRepair(false)}
+            onSaved={() => {
+              setRepair(false);
+              setView("compose");
+              setReturnFocus((count) => count + 1);
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+            }}
+          />
+        ) : null}
+        {!ready ? (
+          <FirstRun
+            onSaved={(id) => {
+              setProfileId(id);
+              setView("compose");
+              setReturnFocus((count) => count + 1);
+              void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+            }}
+          />
+        ) : null}
+        {selected && manage && !repair ? (
           <ProfileSettings
             profiles={profiles.data ?? []}
             currentId={selected.id}
@@ -257,13 +278,17 @@ export function App() {
             }}
           />
         ) : null}
-        {selected && !manage && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
-        {selected && !manage && view === "compose" ? <Composer profile={selected} /> : null}
-        {selected && !manage && view === "calendar" ? (
+        {selected && !manage && !repair && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
+        {selected ? (
+          <div hidden={repair || manage || view !== "compose"}>
+            <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} />
+          </div>
+        ) : null}
+        {selected && !manage && !repair && view === "calendar" ? (
           <Calendar profileId={selected.id} canSend={(selected.relays ?? []).some((item) => item.publish)} />
         ) : null}
-        {selected && !manage && view === "log" ? <Log /> : null}
-        {selected && !manage && view === "sign" ? <Sign profile={selected} /> : null}
+        {selected && !manage && !repair && view === "log" ? <Log /> : null}
+        {selected && !manage && !repair && view === "sign" ? <Sign profile={selected} /> : null}
       </main>
     </>
   );

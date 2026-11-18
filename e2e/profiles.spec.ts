@@ -302,27 +302,29 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.goto("/");
   await emptyProfiles(page);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your identity" })).toBeVisible();
+  await expect(page.getByText("Set up a profile")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+  await expect(page.getByLabel("Criteria file")).toHaveCount(0);
   await shots(page, "first-run-empty");
   await axe(page, "first run");
 
-  await page.getByLabel("Label").fill("Desk");
-  await page.getByLabel("npub", { exact: true }).fill("hello");
-  await page.getByRole("button", { name: "Save profile" }).click();
+  await page.getByLabel("Profile name").fill("Desk");
+  await page.getByLabel("Public identity (npub)").fill("hello");
+  await page.getByTestId("setup-continue").click();
   await expect(page.getByText("That isn't an npub. It starts with npub1.")).toBeVisible();
   await shots(page, "error-npub");
-  await page.getByLabel("npub", { exact: true }).fill(signer.pubkey);
-  await page.getByRole("button", { name: "Save profile" }).click();
+  await page.getByLabel("Public identity (npub)").fill(signer.pubkey);
+  await page.getByTestId("setup-continue").click();
   await expect(page.getByText("That looks like a hex key. Paste the npub instead.")).toBeVisible();
   await shots(page, "error-hex");
 
-  await page.getByLabel("Label").fill(`keep ${fixture} out`);
-  await expect(page.getByLabel("Label")).toHaveValue("");
-  const secretAlert = page.getByRole("alert").filter({ hasText: "private key" });
+  await page.getByLabel("Profile name").fill(`keep ${fixture} out`);
+  await expect(page.getByLabel("Profile name")).toHaveValue("");
+  const secretAlert = page.locator("#profile-name-error");
   await expect(secretAlert).toBeVisible();
   await expect(secretAlert).toContainText("private key");
-  await expect(page.getByLabel("Label")).toBeFocused();
+  await expect(page.getByLabel("Profile name")).toBeFocused();
   const secretPaint = await secretAlert.evaluate((node) => {
     const probe = document.createElement("span");
     document.body.append(probe);
@@ -333,22 +335,21 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   });
   expect(secretPaint.color).toBe(secretPaint.expected);
   await shots(page, "secret-block");
-  await page.getByLabel("Label").fill("Desk");
-
-  await page.getByLabel("Criteria file").fill("missing.md");
-  await page.getByLabel("Criteria file").blur();
-  await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to desk.")).toBeVisible();
-  await expectCriteriaDescribed(page, "missing.md");
-  await shots(page, "error-criteria-missing");
-  mkdirSync("e2e/run/criteria", { recursive: true });
-  writeFileSync("e2e/run/criteria/demo.md", exampleCriteria);
-  await page.getByLabel("Criteria file").fill("criteria/demo.md");
-  await page.getByLabel("Criteria file").blur();
-  await expect(page.getByText("criteria/demo.md has profile_id example. Set profile_id to desk and save again.")).toBeVisible();
-  await expectCriteriaDescribed(page, "criteria/demo.md");
-  await shots(page, "error-criteria");
-  seedCriteria("desk", "demo.md");
-  await page.getByLabel("Criteria file").fill("criteria/demo.md");
+  await page.getByLabel("Profile name").fill("Desk");
+  await page.getByLabel("Public identity (npub)").fill(signer.npub);
+  await expect(page.getByTestId("npub-settled")).toBeVisible();
+  await page.getByTestId("setup-continue").click();
+  await expect(page.getByRole("heading", { name: "Signing method" })).toBeFocused();
+  await page.getByTestId("setup-continue").click();
+  await expect(page.getByText("Choose a signing method.")).toBeVisible();
+  await page.getByRole("radio", { name: "Remote signer (bunker)" }).click();
+  await expect(page.getByTestId("signer-status")).toHaveText("Not paired. You can pair it after this profile is saved.");
+  await expect(page.getByLabel("Bunker link")).toHaveCount(0);
+  await page.getByRole("radio", { name: "Browser extension" }).click();
+  await expect(page.getByTestId("signer-status")).toHaveText("Not connected yet. It will be used later, on Sign.");
+  await page.getByTestId("setup-continue").click();
+  await expect(page.getByRole("heading", { name: "Local setup" })).toBeFocused();
+  await page.getByText("Relay settings", { exact: true }).click();
 
   await page.getByRole("textbox", { name: "Relay", exact: true }).fill("https://nope.example");
   await page.getByTestId("add-relay").click();
@@ -362,12 +363,6 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await expect(page.getByText("No relays yet.")).toBeVisible();
   await shots(page, "empty-relays");
 
-  await page.getByRole("radio", { name: "Bunker (NIP-46)" }).click();
-  await expect(page.getByLabel("Bunker link")).toBeFocused();
-  await expect(page.getByTestId("pair-state")).toHaveText("Not paired");
-  await shots(page, "bunker-revealed");
-  await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
-  await expect(page.getByRole("radio", { name: "Browser signer (NIP-07)" })).toBeFocused();
   const nip65 = page.locator("#nip65-switch");
   const publicRelays = page.locator("#public-switch");
   await expect(nip65).not.toBeChecked();
@@ -417,9 +412,6 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("add-relay").click();
   await expect(page.getByTestId("relay-row")).toContainText(url);
   await shots(page, "relays-loopback");
-  await page.getByLabel("npub", { exact: true }).fill(signer.npub);
-  await expect(page.getByTestId("npub-settled")).toBeVisible();
-  await expect(page.getByTestId("change-npub")).toBeFocused();
   await shots(page, "first-run-filled");
   const savePaint = await page.getByTestId("save-profile").evaluate((node) => {
     const probe = document.createElement("span");
@@ -436,6 +428,19 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("profile").click();
   await page.getByTestId("manage-profiles").click();
   await expect(page.getByTestId("profile-settings")).toBeVisible();
+  await page.getByLabel("Criteria file").fill("missing.md");
+  await page.getByLabel("Criteria file").blur();
+  await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to desk.")).toBeVisible();
+  await expectCriteriaDescribed(page, "missing.md");
+  await shots(page, "error-criteria-missing");
+  mkdirSync("e2e/run/criteria", { recursive: true });
+  writeFileSync("e2e/run/criteria/demo.md", exampleCriteria);
+  await page.getByLabel("Criteria file").fill("criteria/demo.md");
+  await page.getByLabel("Criteria file").blur();
+  await expect(page.getByText("criteria/demo.md has profile_id example. Set profile_id to desk and save again.")).toBeVisible();
+  await expectCriteriaDescribed(page, "criteria/demo.md");
+  await shots(page, "error-criteria");
+  await page.getByLabel("Criteria file").fill("");
   const addChrome = await page.getByTestId("add-profile").evaluate((node) => {
     const style = getComputedStyle(node);
     const probe = document.createElement("span");
@@ -480,6 +485,17 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await expect(page.getByTestId("profile-list")).toBeVisible();
   await expect(page.getByTestId("profile-pane")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(async () => {
+    const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
+    const headers = { "content-type": "application/json", "x-csrf-token": session.token };
+    const rows = (await fetch("/api/items?profileId=desk").then((response) => response.json())) as { id: string; status: string }[];
+    for (const item of rows) {
+      if (["approved", "signed", "queued", "failed"].includes(item.status)) {
+        await fetch(`/api/items/${item.id}/discard`, { method: "POST", headers, body: JSON.stringify({ reason: "clear" }) });
+      }
+    }
+  });
+  await page.waitForTimeout(400);
   await page.getByTestId("remove-profile").click();
   await expect(page.getByText("This profile has no queued or signed notes.")).toBeVisible();
   await shots(page, "remove-empty", "sheet");
@@ -489,16 +505,15 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   const waiting = await page.evaluate(async (profileId) => {
     const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
     const headers = { "content-type": "application/json", "x-csrf-token": session.token };
-    const suggested = await fetch("/api/suggestions", {
+    const composed = await fetch("/api/compose", {
       method: "POST",
       headers,
       body: JSON.stringify({
         profileId,
-        rationale: "because",
         draft: { type: "note", content: "Queued from the test", proposedFireAt: Math.floor(Date.now() / 1000) + 3600 },
       }),
-    }).then((response) => response.json() as Promise<{ id: string }>);
-    await fetch(`/api/items/${suggested.id}/approve`, { method: "POST", headers, body: "{}" });
+    });
+    if (!composed.ok) throw new Error(await composed.text());
     return fetch("/api/sign/nip07/next", {
       method: "POST",
       headers,
@@ -531,7 +546,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove profile" }).click();
   await expect(page.locator("#section-title")).toBeFocused();
   await grab(page, "remove-one-after");
-  await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your identity" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await shots(page, "first-run-return");
 
@@ -568,28 +583,15 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
     await grab(page, "remove-two-after");
   }
   await emptyProfiles(page);
+  await createProfile(page, "Other", other.npub, url);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Set up a profile" })).toBeVisible();
-
-  await page.getByLabel("Label").fill("Other");
-  await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
-  seedCriteria("other");
-  await page.getByLabel("Criteria file").fill("criteria/other.md");
-  await page.getByLabel("npub", { exact: true }).fill(other.npub);
-  await expect(page.getByTestId("npub-settled")).toBeVisible();
-  await page.getByRole("textbox", { name: "Relay", exact: true }).fill(url);
-  await page.getByTestId("add-relay").click();
-  await expect(page.getByTestId("relay-row")).toContainText(url);
-  await page.getByTestId("save-profile").click();
-  await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
   await page.getByTestId("profile").click();
   await page.getByTestId("manage-profiles").click();
   await page.getByTestId("add-profile").click();
   await page.getByLabel("Label").fill("Copy");
   await page.getByLabel("npub", { exact: true }).fill(other.npub);
   await page.getByRole("radio", { name: "Android signer (NIP-55)" }).click();
-  await page.getByLabel("Criteria file").fill("criteria/demo.md");
   await page.getByTestId("save-profile").click();
   await expect(page.getByText(`This npub already has a profile: Other.`)).toBeVisible();
   await settle(page);
@@ -680,7 +682,7 @@ test("a pasted private key on a profile field uses a danger border and returns t
   await page.goto("/");
   await emptyProfiles(page);
   await page.reload();
-  const field = page.getByLabel("Label");
+  const field = page.getByLabel("Profile name");
   await field.fill(fixture);
   await expect(page.getByRole("alert")).toContainText("private key");
   await expect(field).toBeFocused();

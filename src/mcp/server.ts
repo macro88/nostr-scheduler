@@ -86,7 +86,7 @@ function profileById(ctx: McpContext, id: string): Profile {
 
 function fireTimesOf(item: ReturnType<WorkStore["list"]>[number]): number[] {
   if (item.status === "discarded") return [];
-  if (item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
+  if (item.status === "draft" || item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
     if (item.draft.type === "thread") return item.draft.segments.map((segment) => segment.proposedFireAt);
     return [item.draft.proposedFireAt];
   }

@@ -4,6 +4,7 @@ import type {
   Discarded,
   Draft,
   Failed,
+  ManualDraft,
   Missed,
   NonEmpty,
   PerRelayResult,
@@ -14,6 +15,18 @@ import type {
   Suggestion,
   WorkItem,
 } from "./types.ts";
+
+export function scheduleManual(item: ManualDraft, at: UnixSeconds): Approved {
+  return {
+    status: "approved",
+    origin: "manual",
+    id: item.id,
+    profileId: item.profileId,
+    draft: item.draft,
+    createdAt: item.createdAt,
+    approvedAt: at,
+  };
+}
 
 export function approve(item: Suggestion, at: UnixSeconds): Approved {
   return {
@@ -153,6 +166,10 @@ export type WorkCommand =
 
 export function applyCommand(item: WorkItem, command: WorkCommand, at: UnixSeconds): WorkItem {
   switch (item.status) {
+    case "draft":
+      if (command.type === "edit") return { ...item, draft: command.draft };
+      if (command.type === "approve") return scheduleManual(item, at);
+      break;
     case "suggestion":
       if (command.type === "approve") return approve(item, at);
       if (command.type === "reject") return reject(item, { at, reason: command.reason });

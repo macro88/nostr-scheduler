@@ -200,4 +200,41 @@ describe("manual notes and suggestions", () => {
     expect(existsSync(feedbackPath(join(dir, "criteria", "demo.md"), "desk"))).toBe(false);
     close();
   });
+
+  test("saving without scheduling keeps a manual draft and one later schedule", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    await api.post("/api/profiles", {
+      label: "Desk",
+      npub: signer.npub,
+      signer: { kind: "nip07" },
+      relays: ["ws://127.0.0.1:9"],
+    });
+    const draft = { type: "note", content: "Hold this.", proposedFireAt: clock + 3600 };
+    const saved = await api.post("/api/drafts", { profileId: "desk", draft, origin: "suggestion", writtenBy: "agent" });
+    const body = (await saved.json()) as { id: string; status: string; origin: string };
+    expect(saved.status).toBe(200);
+    expect(body.status).toBe("draft");
+    expect(body.origin).toBe("manual");
+    const again = await api.post("/api/drafts", { profileId: "desk", id: body.id, draft: { ...draft, content: "Hold this, still." } });
+    expect(again.status).toBe(200);
+    const scheduled = await api.post(`/api/items/${body.id}/approve`, {});
+    const scheduledBody = (await scheduled.json()) as { status: string; origin: string };
+    expect(scheduled.status).toBe(200);
+    expect(scheduledBody).toMatchObject({ status: "approved", origin: "manual" });
+    const items = (await (await api.get("/api/items?profileId=desk")).json()) as { id: string; status: string }[];
+    expect(items.map((item) => ({ id: item.id, status: item.status }))).toEqual([{ id: body.id, status: "approved" }]);
+    expect(existsSync(join(dir, "criteria"))).toBe(false);
+    const suggestion = await api.post("/api/suggestions", {
+      profileId: "desk",
+      rationale: "agent",
+      draft,
+      origin: "manual",
+    });
+    expect(suggestion.status).toBe(400);
+    close();
+  });
 });

@@ -12,7 +12,10 @@ import { WhenField } from "../WhenField";
 
 type Kind = "note" | "thread" | "reply";
 
-export function Composer({ profile }: { profile: Profile }) {
+const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
+const rulesCopy = "Writing rules for suggestions are not set up. You can still schedule a note you write. A reload clears this box. A saved note stays in the queue until you schedule it.";
+
+export function Composer({ profile, onRepair, headingId }: { profile: Profile; onRepair?: () => void; headingId?: string }) {
   const queryClient = useQueryClient();
   const editor = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<Kind>("note");
@@ -23,6 +26,8 @@ export function Composer({ profile }: { profile: Profile }) {
   const [context, setContext] = useState("");
   const [reply, setReply] = useState("");
   const [formError, setFormError] = useState<unknown>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const scheduling = useRef(false);
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 801px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 801px)");
@@ -37,7 +42,7 @@ export function Composer({ profile }: { profile: Profile }) {
   const weekStart = Math.floor(startOfWeek(new Date()).getTime() / 1000);
   const weekEnd = weekStart + 7 * 24 * 60 * 60;
   const upcoming = (queue.data ?? [])
-    .filter((item) => ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status))
+    .filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status))
     .filter((item) => {
       const at = item.fireAt[0] ?? 0;
       return at >= weekStart && at < weekEnd;
@@ -65,19 +70,30 @@ export function Composer({ profile }: { profile: Profile }) {
       )
     : upcoming;
 
+  function currentDraft() {
+    const fireAt = when;
+    if (!Number.isFinite(fireAt) || fireAt <= Math.floor(Date.now() / 1000)) throw new Error("created_at in the past");
+    if (fireAt > Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) throw new Error("further ahead than the sign-ahead horizon");
+    if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
+    if (kind === "note") return { type: "note", content: note, proposedFireAt: fireAt };
+    if (kind === "thread") return { type: "thread", segments: parts.map((content, index) => ({ content, proposedFireAt: fireAt + index })) };
+    return { type: "reply", content: reply, proposedFireAt: fireAt, target: JSON.parse(contextTarget(context, ref)) };
+  }
+
   const save = useMutation({
     mutationFn: async () => {
-      const fireAt = when;
-      if (!Number.isFinite(fireAt) || fireAt <= Math.floor(Date.now() / 1000)) throw new Error("created_at in the past");
-      if (fireAt > Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) throw new Error("further ahead than the sign-ahead horizon");
-      if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
-      const draft =
-        kind === "note"
-          ? { type: "note", content: note, proposedFireAt: fireAt }
-          : kind === "thread"
-            ? { type: "thread", segments: parts.map((content, index) => ({ content, proposedFireAt: fireAt + index })) }
-            : { type: "reply", content: reply, proposedFireAt: fireAt, target: JSON.parse(contextTarget(context, ref)) };
-      return api("/api/compose", { method: "POST", body: JSON.stringify({ profileId: profile.id, draft }) });
+      if (scheduling.current || profile.criteriaState === "invalid") throw new Error(repairCopy);
+      scheduling.current = true;
+      try {
+        const draft = currentDraft();
+        if (draftId) {
+          await api(`/api/drafts`, { method: "POST", body: JSON.stringify({ profileId: profile.id, id: draftId, draft }) });
+          return api<{ id: string }>(`/api/items/${draftId}/approve`, { method: "POST", body: "{}" });
+        }
+        return api<{ id: string }>("/api/compose", { method: "POST", body: JSON.stringify({ profileId: profile.id, draft }) });
+      } finally {
+        scheduling.current = false;
+      }
     },
     onSuccess: () => {
       const button = document.querySelector<HTMLElement>("[data-testid='save-draft']");
@@ -86,6 +102,7 @@ export function Composer({ profile }: { profile: Profile }) {
         flyScheduleChip(button, formatWhen(when));
       }
       setFormError(null);
+      setDraftId(null);
       setNote("");
       setParts(["", ""]);
       setReply("");
@@ -99,15 +116,15 @@ export function Composer({ profile }: { profile: Profile }) {
   });
   const keep = useMutation({
     mutationFn: async () => {
-      if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
-      const draft = kind === "note" ? { type: "note", content: note, proposedFireAt: when } : { type: "note", content: text, proposedFireAt: when };
-      return api("/api/suggestions", { method: "POST", body: JSON.stringify({ profileId: profile.id, rationale: "saved from the composer", draft }) });
+      const draft = currentDraft();
+      return api<{ id: string }>("/api/drafts", {
+        method: "POST",
+        body: JSON.stringify({ profileId: profile.id, draft, ...(draftId ? { id: draftId } : {}) }),
+      });
     },
-    onSuccess: () => {
-      setNote("");
-      setParts(["", ""]);
-      setReply("");
-      notifySuccess("Saved to the inbox.");
+    onSuccess: (saved) => {
+      setDraftId(saved.id);
+      notifySuccess("Saved.");
       void queryClient.invalidateQueries({ queryKey: ["items"] });
       editor.current?.focus();
     },
@@ -117,7 +134,7 @@ export function Composer({ profile }: { profile: Profile }) {
   return (
     <div className="split">
       <section className="write-pane">
-        <h1 id="section-title" tabIndex={-1}>
+        <h1 {...(headingId ? { id: headingId } : {})} tabIndex={-1}>
           {title}
         </h1>
         <div className="tabs" role="group" aria-label="Post kind">
@@ -141,7 +158,7 @@ export function Composer({ profile }: { profile: Profile }) {
             onChange={(event) => setNote(event.target.value)}
             onKeyDown={(event) => {
               if (blocked) return;
-              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
             }}
           />
         ) : null}
@@ -161,7 +178,7 @@ export function Composer({ profile }: { profile: Profile }) {
                 onChange={(event) => setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
                 onKeyDown={(event) => {
                   if (blocked) return;
-                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
+                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
                 }}
               />
             ))}
@@ -201,7 +218,7 @@ export function Composer({ profile }: { profile: Profile }) {
               onChange={(event) => setReply(event.target.value)}
               onKeyDown={(event) => {
                 if (blocked) return;
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") save.mutate();
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
               }}
             />
           </div>
@@ -218,18 +235,31 @@ export function Composer({ profile }: { profile: Profile }) {
               {text.length} / 280
             </span>
           </div>
+          {profile.criteriaState === "invalid" ? (
+            <div className="error" role="alert" data-testid="repair-note">
+              <p>{repairCopy}</p>
+              <Button type="button" variant="outline" data-testid="repair-profile" onClick={() => onRepair?.()}>
+                Repair profile
+              </Button>
+            </div>
+          ) : null}
+          {profile.criteriaState === "absent" ? (
+            <p className="field-note" data-testid="writing-rules-note">
+              {rulesCopy}
+            </p>
+          ) : null}
           {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
           <div className="composer-actions">
-            <Button type="button" variant="ghost" onClick={() => keep.mutate()} disabled={blocked || keep.isPending}>
+            <Button type="button" variant="ghost" data-testid="save-note" onClick={() => keep.mutate()} disabled={blocked || keep.isPending || save.isPending}>
               Save without scheduling
             </Button>
             <Button
               type="button"
               variant="primary"
               data-testid="save-draft"
-              title={wide ? "Control or Command and Enter schedules." : undefined}
+              title={wide && profile.criteriaState !== "invalid" ? "Control or Command and Enter schedules." : undefined}
               onClick={() => save.mutate()}
-              disabled={blocked || save.isPending}
+              disabled={blocked || save.isPending || keep.isPending || profile.criteriaState === "invalid"}
             >
               Schedule
             </Button>
