@@ -8,9 +8,23 @@ const PAGE = `<!doctype html>
 <title>Sign</title>
 <p id="status">Waiting for the browser signer.</p>
 <script>
+async function provider() {
+  const ready = () => window.nostr && typeof window.nostr.signEvent === "function";
+  if (ready()) return window.nostr;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(ready() ? window.nostr : null), 1000);
+    if (document.readyState === "complete") return;
+    window.addEventListener("load", () => {
+      if (!ready()) return;
+      clearTimeout(timer);
+      resolve(window.nostr);
+    }, { once: true });
+  });
+}
 async function run() {
   const status = document.getElementById("status");
-  if (!window.nostr || typeof window.nostr.signEvent !== "function") {
+  const signer = await provider();
+  if (!signer) {
     status.textContent = "No browser signer is available. This page does not collect a secret.";
     await fetch("/failed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "no browser signer" }) });
     return;
@@ -21,7 +35,7 @@ async function run() {
       status.textContent = "Signed. You can close this page.";
       return;
     }
-    const signed = await window.nostr.signEvent(pending.event);
+    const signed = await signer.signEvent(pending.event);
     const saved = await fetch("/signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(signed) });
     if (!saved.ok) {
       status.textContent = "The signed event was rejected.";

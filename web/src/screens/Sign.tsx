@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { Button, EmptyState, Input } from "@macro88/ui";
-import { api, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
+import { api, cancelBrowserSign, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatQueueWhen } from "../format";
 import { usePendingSurface } from "../pending";
@@ -41,12 +41,13 @@ export function Sign({ profile }: { profile: Profile }) {
     void QRCode.toString(value, { type: "svg", margin: 1, width: 180 }).then(setSvg);
   }, [info.data?.connectUri]);
 
+  useEffect(() => cancelBrowserSign, []);
   const browser = useMutation({
     mutationFn: () =>
       signWithBrowser(profile.id, (index) => {
         setStep(index);
         setStatus(steps > 1 ? `Waiting for the signer. ${index} of ${steps}` : "Waiting for the signer");
-      }, selected),
+      }, selected, profile.pubkey),
     onSuccess: (count) => {
       const button = document.querySelector<HTMLElement>("[data-testid='sign-browser']");
       if (button) showCheck(button);

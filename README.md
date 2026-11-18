@@ -121,7 +121,7 @@ Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. Th
 
 If a change fails, the page says what to do next. The technical detail stays behind a disclosure. Signing says how far through a batch you are only when more than one note is being signed.
 
-Signing uses the browser signer on this page, or a paired bunker. Threads are signed root first. The bunker session stays in the OS keychain. The pairing code stays hidden until you ask for it. Test and demo runs keep that session in memory so they do not need a keychain.
+Signing uses the browser signer on this page, or a paired bunker. The page asks `window.nostr` to sign only after you choose Sign. A NIP-07 extension may attach that object after the page is interactive, so the click reads it again after a short wait. It does not replace the extension's own property. If it never appears, the page says no browser signer is available. If the object is present but cannot sign, or the signer refuses, the page says that instead. A signature for a different public key is not submitted. Threads are signed root first. The bunker session stays in the OS keychain. The pairing code stays hidden until you ask for it. Test and demo runs keep that session in memory so they do not need a keychain.
 
 ## Demo with a mock signer and a local relay
 
