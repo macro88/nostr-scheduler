@@ -188,6 +188,7 @@ export function ProfileForm({
     try {
       const query = new URLSearchParams({ path: path.trim() });
       if (profile?.id) query.set("profileId", profile.id);
+      else if (label.trim() && !containsPrivateKey(label)) query.set("label", label.trim());
       const body = await api<{ detail: string }>(`/api/criteria-path?${query.toString()}`);
       setCriteriaDetail(body.detail);
       setFormError("");
@@ -384,6 +385,9 @@ export function ProfileForm({
           value={label}
           error={secretField === "label" ? secretWarning : undefined}
           onChange={(event) => take("label", event.target.value, setLabel)}
+          onBlur={() => {
+            if (criteria.trim()) void lookAtCriteria(criteria);
+          }}
         />
         <AnimatePresence mode="sync" initial={false}>
           {npubOpen ? (
@@ -421,11 +425,10 @@ export function ProfileForm({
           label="Criteria file"
           hint="A path inside the data directory."
           value={criteria}
-          error={secretField === "criteria" ? secretWarning : undefined}
+          error={secretField === "criteria" ? secretWarning : criteriaDetail || undefined}
           onChange={(event) => take("criteria", event.target.value, setCriteria)}
           onBlur={() => void lookAtCriteria(criteria)}
         />
-        {criteriaDetail ? <p className="field-note">{criteriaDetail}</p> : null}
       </section>
       <section aria-labelledby="signer-section">
         <h2 id="signer-section">Signer</h2>

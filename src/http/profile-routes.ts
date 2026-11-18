@@ -5,7 +5,8 @@ import { InputError } from "../domain/brand.ts";
 import { containsPrivateKey, assertValueHasNoPrivateKey } from "../domain/private-key.ts";
 import { classifyPublishRelay, isLoopbackRelay } from "../domain/relays.ts";
 import { assessCriteria, criteriaBlock, expectedProfileId } from "../criteria/readiness.ts";
-import { createProfileRecord, deleteProfileRecord, updateProfileRecord } from "../profiles/record.ts";
+import { profileEntries, readProfileDocument } from "../profiles/file.ts";
+import { createProfileRecord, deleteProfileRecord, profileIdFromLabel, updateProfileRecord } from "../profiles/record.ts";
 import type { Profile, UnixSeconds } from "../domain/types.ts";
 import type { WorkStore } from "../work/store.ts";
 import { profileJson } from "./profile-view.ts";
@@ -64,7 +65,14 @@ export function mountProfileRoutes(app: Hono, deps: Deps): void {
   app.get("/api/criteria-path", (c) => {
     const path = c.req.query("path") ?? "";
     if (containsPrivateKey(path)) assertValueHasNoPrivateKey(path);
-    const check = assessCriteria(deps.dataDir, path, expectedProfileId(c.req.query("profileId")));
+    const label = c.req.query("label");
+    let expected = expectedProfileId(c.req.query("profileId"));
+    if (!expected && label && !containsPrivateKey(label)) {
+      const doc = readProfileDocument(deps.profilesPath);
+      const taken = new Set(profileEntries(doc).flatMap((entry) => (typeof entry.id === "string" ? [entry.id] : [])));
+      expected = profileIdFromLabel(label, taken);
+    }
+    const check = assessCriteria(deps.dataDir, path, expected);
     const detail = criteriaBlock(check) ?? "";
     if (check.state === "outside") return c.json({ path: "", exists: false, ready: false, detail });
     return c.json({ path: check.path, exists: check.state !== "missing", ready: check.state === "ready", detail });

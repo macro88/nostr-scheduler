@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { appendFeedback, feedbackEntry, feedbackPath } from "../criteria/feedback.ts";
 import { parseCriteria } from "../criteria/parse.ts";
 import { assertCriteriaReady } from "../criteria/readiness.ts";
+import { runtimeMode } from "../mode.ts";
 import {
   profileId,
   relayUrl,
@@ -126,6 +127,13 @@ export function parseWorkItem(value: unknown): WorkItem {
   throw new Error(`unknown status ${value.status}`);
 }
 
+let failFeedbackRestore = false;
+
+export function armFeedbackRestoreFailure(): void {
+  if (runtimeMode() !== "test") return;
+  failFeedbackRestore = true;
+}
+
 function feedbackActionFor(command: WorkCommand): FeedbackAction | null {
   if (command.type === "approve") return "approved";
   if (command.type === "edit") return "edited";
@@ -237,8 +245,8 @@ export class WorkStore {
       throw new PrivateKeyInContentError();
     }
     const feedbackAction = feedbackActionFor(command);
-    if (profile && feedbackAction) this.requireCriteria(profile);
-    return this.atomic(() => {
+    if (profile && feedbackAction && command.type !== "missed") this.requireCriteria(profile);
+    const saved = this.atomic(() => {
       const current = this.get(id);
       const next = applyCommand(current, command, at);
       const before = signedEventsOf(current);
@@ -246,11 +254,13 @@ export class WorkStore {
       if (before && after && !eventsMatch(before, after)) {
         throw new Error("signed events are frozen");
       }
-      if (profile && feedbackAction) this.preserve(feedbackPath(profile.criteriaPath, profile.id));
+      if (profile && feedbackAction && command.type !== "missed") this.preserve(feedbackPath(profile.criteriaPath, profile.id));
       this.save(next);
-      if (profile && feedbackAction) this.logFeedback(profile, id, feedbackAction, at, command);
+      if (profile && feedbackAction && command.type !== "missed") this.logFeedback(profile, id, feedbackAction, at, command);
       return next;
     });
+    if (command.type === "missed" && profile) this.noteMissed(profile, id, at);
+    return saved;
   }
 
   recordPublish(args: {
@@ -323,14 +333,25 @@ export class WorkStore {
   }
 
   private restoreSnapshots(): void {
-    for (const [path, bytes] of this.snapshots) {
-      if (bytes === null) {
-        if (existsSync(path)) unlinkSync(path);
-      } else {
-        writeFileSync(path, bytes);
+    const pending = [...this.snapshots.entries()];
+    this.snapshots.clear();
+    if (failFeedbackRestore) {
+      failFeedbackRestore = false;
+      throw new Error("feedback restore failed");
+    }
+    const failed: string[] = [];
+    for (const [path, bytes] of pending) {
+      try {
+        if (bytes === null) {
+          if (existsSync(path)) unlinkSync(path);
+        } else {
+          writeFileSync(path, bytes);
+        }
+      } catch {
+        failed.push(this.safeName(path));
       }
     }
-    this.snapshots.clear();
+    if (failed.length > 0) throw new Error(`Could not restore feedback at ${failed.join(", ")}.`);
   }
 
   private atomic<T>(run: () => T): T {
@@ -349,11 +370,26 @@ export class WorkStore {
         } catch {
           // The transaction is already closed.
         }
-        this.restoreSnapshots();
+        try {
+          this.restoreSnapshots();
+        } catch (restoreError) {
+          const first = error instanceof Error ? error.message : "save failed";
+          const second = restoreError instanceof Error ? restoreError.message : "restore failed";
+          throw new Error(`${first}. ${second}`);
+        }
       }
       throw error;
     } finally {
       this.depth -= 1;
+    }
+  }
+
+  private noteMissed(profile: Profile, id: SuggestionId, at: UnixSeconds): void {
+    try {
+      this.requireCriteria(profile);
+      this.logFeedback(profile, id, "missed", at, { type: "missed", lateBySeconds: 0 });
+    } catch {
+      // The signed note is already missed. A missing criteria file does not put it back on the queue.
     }
   }
 
