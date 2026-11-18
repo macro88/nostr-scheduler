@@ -250,6 +250,7 @@ export class WorkStore {
   }
 
   composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds }): WorkItem {
+    this.assertManualConfigUsable(args.profile);
     return this.atomic(() => {
       assertNoPrivateKey(args.draft);
       const item: WorkItem = {
@@ -302,6 +303,7 @@ export class WorkStore {
       const current = this.get(id);
       const feedbackAction = feedbackActionFor(command);
       const logsFeedback = Boolean(profile && feedbackAction && current.origin !== "manual" && command.type !== "missed");
+      if (profile && current.origin === "manual" && command.type === "approve") this.assertManualConfigUsable(profile);
       if (logsFeedback && profile) this.requireCriteria(profile);
       const next = applyCommand(current, command, at);
       const before = signedEventsOf(current);
@@ -369,6 +371,11 @@ export class WorkStore {
 
   private requireCriteria(profile: Profile): void {
     assertCriteriaReady(this.dataDir, this.criteriaFile(profile), profile.id);
+  }
+
+  private assertManualConfigUsable(profile: Profile): void {
+    if (!profile.criteriaPath) return;
+    assertCriteriaReady(this.dataDir, profile.criteriaPath, profile.id);
   }
 
   private safeName(path: string): string {

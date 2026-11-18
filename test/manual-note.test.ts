@@ -32,6 +32,8 @@ async function authed(app: ReturnType<typeof createApp>["app"]) {
   return {
     post: (path: string, payload: unknown) =>
       app.request(`http://127.0.0.1:4173${path}`, { method: "POST", headers, body: JSON.stringify(payload) }),
+    patch: (path: string, payload: unknown) =>
+      app.request(`http://127.0.0.1:4173${path}`, { method: "PATCH", headers, body: JSON.stringify(payload) }),
     get: (path: string) => app.request(`http://127.0.0.1:4173${path}`, { headers: { host: headers.host, cookie } }),
   };
 }
@@ -235,6 +237,81 @@ describe("manual notes and suggestions", () => {
       origin: "manual",
     });
     expect(suggestion.status).toBe(400);
+    close();
+  });
+
+  test("an unusable criteria path blocks manual scheduling and a repair allows it", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    const clock = 1_700_000_000;
+    const custom = ["---", "profile_id: other", "version: 4", "---", "# Voice", "keep this voice", "", "## Bench notes", "do not rewrite", ""].join("\n");
+    mkdirSync(join(dir, "criteria"), { recursive: true });
+    writeFileSync(join(dir, "criteria", "kept.md"), custom);
+    writeFileSync(
+      join(dir, "profiles.yaml"),
+      [
+        "profiles:",
+        "  - id: test",
+        "    label: Test",
+        `    npub: ${signer.npub}`,
+        `    pubkey: ${signer.pubkey}`,
+        "    suggester_id: test-suggester",
+        "    signer:",
+        "      kind: nip07",
+        "    relays:",
+        "      - ws://127.0.0.1:9",
+        "    read_nip65: false",
+        "    allow_public_relays: false",
+        "    criteria_path: test",
+        "",
+      ].join("\n"),
+    );
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    const draft = { type: "note", content: "Held for repair.", proposedFireAt: clock + 3600 };
+    const composed = await api.post("/api/compose", { profileId: "test", draft });
+    const composedBody = (await composed.json()) as { error?: string };
+    expect(composed.status).toBe(400);
+    expect(composedBody.error).toContain("test");
+    const saved = await api.post("/api/drafts", { profileId: "test", draft });
+    const draftBody = (await saved.json()) as { id: string; status: string; origin: string };
+    expect(saved.status).toBe(200);
+    expect(draftBody).toMatchObject({ status: "draft", origin: "manual" });
+    const blocked = await api.post(`/api/items/${draftBody.id}/approve`, {});
+    expect(blocked.status).toBe(400);
+    const during = (await (await api.get("/api/items?profileId=test")).json()) as { id: string; status: string; origin: string }[];
+    expect(during.map((item) => ({ id: item.id, status: item.status, origin: item.origin }))).toEqual([
+      { id: draftBody.id, status: "draft", origin: "manual" },
+    ]);
+    expect(existsSync(join(dir, "test.feedback.yaml"))).toBe(false);
+    expect(readFileSync(join(dir, "criteria", "kept.md"), "utf8")).toBe(custom);
+    const suggested = await api.post("/api/suggestions", { profileId: "test", rationale: "agent", draft });
+    expect(suggested.status).toBe(400);
+    expect((await (await api.get("/api/items?profileId=test")).json()) as { status: string }[]).toHaveLength(1);
+
+    const repaired = await api.patch("/api/profiles/test", {
+      label: "Test",
+      npub: signer.npub,
+      signer: { kind: "nip07" },
+      relays: ["ws://127.0.0.1:9"],
+      criteriaPath: "",
+    });
+    expect(repaired.status).toBe(200);
+    const scheduled = await api.post(`/api/items/${draftBody.id}/approve`, {});
+    const scheduledBody = (await scheduled.json()) as { status: string; origin: string };
+    expect(scheduled.status).toBe(200);
+    expect(scheduledBody).toMatchObject({ status: "approved", origin: "manual" });
+    const open = await api.post("/api/compose", {
+      profileId: "test",
+      draft: { type: "note", content: "After repair.", proposedFireAt: clock + 7200 },
+    });
+    expect(open.status).toBe(200);
+    const after = (await (await api.get("/api/items?profileId=test")).json()) as { status: string; origin: string; preview: string }[];
+    expect(after.map((item) => item.status).sort()).toEqual(["approved", "approved"]);
+    expect(after.every((item) => item.origin === "manual")).toBe(true);
+    expect(readFileSync(join(dir, "criteria", "kept.md"), "utf8")).toBe(custom);
+    const still = await api.post("/api/suggestions", { profileId: "test", rationale: "agent", draft });
+    expect(still.status).toBe(400);
     close();
   });
 });
