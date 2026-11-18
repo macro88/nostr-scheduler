@@ -339,6 +339,7 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByLabel("Criteria file").blur();
   await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to desk.")).toBeVisible();
   await expectCriteriaDescribed(page, "missing.md");
+  await shots(page, "error-criteria-missing");
   mkdirSync("e2e/run/criteria", { recursive: true });
   writeFileSync("e2e/run/criteria/demo.md", exampleCriteria);
   await page.getByLabel("Criteria file").fill("criteria/demo.md");
