@@ -1,3 +1,4 @@
+import { browserSignerForClick, permissionDenied, runBrowserSign } from "./browser-signer";
 import type { Unsigned } from "./nostr";
 
 export type ProfileRelay = {
@@ -72,19 +73,37 @@ export function resetToken(): void {
   token = "";
 }
 
-export async function signWithBrowser(profileId: string, onStep?: (index: number) => void, itemIds?: string[]): Promise<number> {
-  if (!window.nostr) throw new Error("no browser signer");
+export function cancelBrowserSign(): void {
+  runBrowserSign.cancel();
+}
+
+export function signWithBrowser(profileId: string, onStep?: (index: number) => void, itemIds?: string[]): Promise<number> {
+  return runBrowserSign((signal) => signLoaded(profileId, signal, onStep, itemIds));
+}
+
+async function signLoaded(profileId: string, signal: AbortSignal, onStep?: (index: number) => void, itemIds?: string[]): Promise<number> {
+  const provider = await browserSignerForClick({ host: window, signal });
   let count = 0;
   let step = 0;
   for (let guard = 0; guard < 40; guard += 1) {
+    if (signal.aborted) throw new Error("signer cancelled");
     const next = await api<{ done: boolean; itemId?: string; unsigned?: Unsigned }>("/api/sign/nip07/next", {
       method: "POST",
       body: JSON.stringify({ profileId, ...(itemIds ? { itemIds } : {}) }),
     });
+    if (signal.aborted) throw new Error("signer cancelled");
     if (next.done || !next.unsigned || !next.itemId) return count;
     step += 1;
     onStep?.(step);
-    const signed = await window.nostr.signEvent(next.unsigned);
+    let signed: unknown;
+    try {
+      signed = await provider.signEvent(next.unsigned);
+    } catch (error) {
+      if (signal.aborted) throw new Error("signer cancelled");
+      if (permissionDenied(error)) throw new Error(`signer permission denied: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+    if (signal.aborted) throw new Error("signer cancelled");
     const saved = await api<{ done: boolean }>("/api/sign/nip07/submit", {
       method: "POST",
       body: JSON.stringify({ itemId: next.itemId, event: signed }),

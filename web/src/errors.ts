@@ -24,6 +24,15 @@ export function plainError(error: unknown): PlainError {
   if (text.includes("frozen") || text.includes("discard it")) {
     return { message: "This event is signed, so the time is frozen. Discard it and sign again to choose a new time.", detail };
   }
+  if (text.includes("incompatible browser signer")) {
+    return { message: "This browser signer cannot sign notes. Pair a bunker, or use another signer.", detail };
+  }
+  if (text.includes("signer permission denied")) {
+    return { message: "The signer did not allow this note.", detail };
+  }
+  if (text.includes("signer cancelled")) {
+    return { message: "Signing was cancelled.", detail };
+  }
   if (text.includes("no browser signer")) {
     return { message: "No browser signer is available. Pair a bunker, or install a signer for this page.", detail };
   }
