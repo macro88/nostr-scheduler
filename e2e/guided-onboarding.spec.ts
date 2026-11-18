@@ -1,23 +1,34 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 
 const dataDir = "e2e/run";
 
-async function shot(page: Page, name: string) {
+function wipeData() {
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(`${dataDir}/profiles.yaml`, "profiles: []\n");
+  const sqlite = `${dataDir}/app.sqlite`;
+  if (!existsSync(sqlite)) return;
+  const db = new DatabaseSync(sqlite);
+  db.exec("DELETE FROM work_items");
+  db.close();
+}
+
+async function frame(page: Page, theme: "light" | "dark", width: number) {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+  await page.evaluate((value) => {
+    document.documentElement.dataset.scheme = value;
+  }, theme);
+}
+
+async function grab(page: Page, name: string, proof: Record<string, unknown>) {
   const dir = process.env.SCREENSHOT_DIR?.trim();
+  const file = `${name}.png`;
+  console.log(JSON.stringify({ file, ...proof }));
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
-  for (const theme of ["light", "dark"] as const) {
-    await page.evaluate((value) => {
-      document.documentElement.dataset.scheme = value;
-    }, theme);
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await page.screenshot({ path: `${dir}/${name}-${theme}-${width}.png`, animations: "disabled" });
-    }
-  }
-  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.screenshot({ path: `${dir}/${file}`, animations: "disabled" });
 }
 
 async function listItems(page: Page, profileId: string) {
@@ -36,13 +47,11 @@ test("loading shows the wordmark without navigation", async ({ page }) => {
   await expect(page.getByText("Loading profiles")).toBeAttached();
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await expect(page.getByTestId("profile")).toHaveCount(0);
-  await shot(page, "loading");
 });
 
 test("a new profile schedules and saves a manual note without a criteria file", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(`${dataDir}/profiles.yaml`, "profiles: []\n");
+  wipeData();
   const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
   await page.exposeFunction("__nostrSign", (event: Parameters<typeof signer.signEvent>[0]) => signer.signEvent(event));
   await page.addInitScript(() => {
@@ -67,18 +76,15 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Your identity" })).toBeFocused();
   await expect(page.locator("[aria-current='step']")).toHaveText("Profile");
-  await shot(page, "identity");
   await expect(page.getByLabel("Criteria file")).toHaveCount(0);
   await page.getByTestId("setup-continue").click();
   await expect(page.getByText("Enter a profile name.")).toBeVisible();
   await expect(page.locator("#setup-error")).toBeFocused();
-  await shot(page, "error-name");
   await page.getByLabel("Profile name").fill("Desk");
   await page.getByLabel("Public identity (npub)").fill(signer.npub);
   await expect(page.getByTestId("npub-settled")).toBeVisible();
   await page.getByTestId("setup-continue").click();
   await expect(page.getByRole("heading", { name: "Signing method" })).toBeFocused();
-  await shot(page, "signer");
   await page.getByTestId("setup-back").click();
   await expect(page.getByLabel("Profile name")).toHaveValue("Desk");
   await expect(page.getByTestId("setup-continue")).toBeFocused();
@@ -89,7 +95,6 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByTestId("signer-status")).toHaveText("Not connected yet. It will be used later, on Sign.");
   await page.getByTestId("setup-continue").click();
   await expect(page.getByRole("heading", { name: "Local setup" })).toBeFocused();
-  await shot(page, "local");
   await expect(page.getByText("Public relays stay off unless you allow them.")).toBeVisible();
   await page.getByTestId("save-profile").click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
@@ -97,7 +102,6 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByTestId("profile")).toHaveText("Desk");
   await expect(page.getByTestId("writing-rules-note")).toBeVisible();
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
-  await shot(page, "compose");
   const content = `Blank profile ${Date.now()}`;
   await page.getByTestId("note-text").fill(content);
   const when = await page.getByTestId("schedule").innerText();
@@ -128,6 +132,7 @@ test("a new profile schedules and saves a manual note without a criteria file", 
 
 test("an invalid test profile is repaired without scheduling or rewriting policy", async ({ page }) => {
   const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  wipeData();
   mkdirSync(`${dataDir}/criteria`, { recursive: true });
   const kept = `${dataDir}/criteria/kept.md`;
   const custom = ["---", "profile_id: other", "version: 4", "---", "# Voice", "keep this voice", "", "## Bench notes", "do not rewrite", ""].join("\n");
@@ -153,12 +158,14 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   await page.goto("/");
   await page.getByTestId("nav-compose").click();
   await expect(page.getByTestId("repair-note")).toBeVisible();
-  await shot(page, "repair");
   await expect(page.getByTestId("save-draft")).toBeDisabled();
   await expect(page.getByTestId("writing-rules-note")).toHaveCount(0);
   const sentence = `Keep this sentence ${Date.now()}.`;
   await page.getByTestId("note-text").fill(sentence);
   const when = await page.getByTestId("schedule").innerText();
+  await expect(page.getByTestId("note-text")).toHaveValue(sentence);
+  await expect(page.getByTestId("status-approved")).toHaveCount(0);
+  expect(await listItems(page, "test")).toEqual([]);
   await page.getByTestId("repair-profile").click();
   await expect(page.getByRole("heading", { name: "Your identity" })).toBeVisible();
   await expect(page.getByLabel("Profile name")).toHaveValue("Test");
@@ -170,8 +177,8 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   await expect(page.getByTestId("schedule")).toHaveText(when);
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
   await expect(page.getByTestId("writing-rules-note")).toBeVisible();
-  await shot(page, "repaired");
-  expect((await listItems(page, "test")).filter((item) => item.preview === sentence)).toEqual([]);
+  await expect(page.getByTestId("status-approved")).toHaveCount(0);
+  expect(await listItems(page, "test")).toEqual([]);
   expect(readFileSync(kept, "utf8")).toBe(custom);
   await page.getByTestId("save-draft").click();
   await expect(page.getByText("Scheduled for")).toBeVisible();
@@ -187,3 +194,106 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   expect(names?.criteriaPath).toBeNull();
   expect(names?.criteriaState).toBe("absent");
 });
+
+const frames = [
+  ["light", 390],
+  ["light", 1440],
+  ["dark", 390],
+  ["dark", 1440],
+] as const;
+
+for (const [theme, width] of frames) {
+  test(`fresh profile ${theme} ${width} has an empty queue`, async ({ page }) => {
+    wipeData();
+    await frame(page, theme, width);
+    const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+    await page.goto("/");
+    await expect(page.getByLabel("Criteria file")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+    await grab(page, `identity-${theme}-${width}`, { editor: "", queue: "none", approved: 0 });
+    await page.getByLabel("Profile name").fill("Desk");
+    await page.getByLabel("Public identity (npub)").fill(signer.npub);
+    await page.getByTestId("setup-continue").click();
+    await expect(page.getByTestId("signer-status")).toHaveText("No option is selected yet.");
+    await grab(page, `signer-${theme}-${width}`, { connected: false });
+    await page.getByRole("radio", { name: "Browser extension" }).click();
+    await page.getByTestId("setup-continue").click();
+    await expect(page.getByText("Public relays stay off unless you allow them.")).toBeVisible();
+    await grab(page, `local-${theme}-${width}`, { criteriaField: 0 });
+    await page.getByTestId("save-profile").click();
+    await expect(page.getByTestId("profile")).toHaveText("Desk");
+    await expect(page.getByTestId("note-text")).toHaveValue("");
+    await expect(page.getByText("0 this week")).toBeVisible();
+    await expect(page.getByTestId("status-approved")).toHaveCount(0);
+    await grab(page, `compose-empty-${theme}-${width}`, { editor: "", approved: 0, week: "0 this week" });
+    const content = `Fresh ${theme} ${width} ${Date.now()}`;
+    await page.getByTestId("note-text").fill(content);
+    await page.getByTestId("save-draft").click();
+    await expect(page.getByText("Scheduled for")).toBeVisible();
+    const rows = (await listItems(page, "desk")).filter((item) => item.preview === content);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "approved", origin: "manual" });
+    await expect(page.getByTestId("status-approved")).toHaveCount(1);
+    await expect(page.getByTestId("note-text")).toHaveValue("");
+    await grab(page, `fresh-scheduled-${theme}-${width}`, { preview: content, status: "approved", count: 1 });
+  });
+
+  test(`invalid test repair ${theme} ${width} keeps the typed note`, async ({ page }) => {
+    const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+    wipeData();
+    mkdirSync(`${dataDir}/criteria`, { recursive: true });
+    const kept = `${dataDir}/criteria/kept.md`;
+    const custom = ["---", "profile_id: other", "version: 4", "---", "# Voice", "keep this voice", "", "## Bench notes", "do not rewrite", ""].join("\n");
+    writeFileSync(kept, custom);
+    writeFileSync(
+      `${dataDir}/profiles.yaml`,
+      [
+        "profiles:",
+        "  - id: test",
+        "    label: Test",
+        `    npub: ${signer.npub}`,
+        `    pubkey: ${signer.pubkey}`,
+        "    suggester_id: test-suggester",
+        "    signer:",
+        "      kind: nip07",
+        "    relays: []",
+        "    read_nip65: false",
+        "    allow_public_relays: false",
+        "    criteria_path: test",
+        "",
+      ].join("\n"),
+    );
+    await frame(page, theme, width);
+    await page.goto("/");
+    await page.getByTestId("nav-compose").click();
+    const sentence = `Keep this sentence ${theme} ${width} ${Date.now()}`;
+    await page.getByTestId("note-text").fill(sentence);
+    const when = await page.getByTestId("schedule").innerText();
+    await expect(page.getByTestId("repair-note")).toBeVisible();
+    await expect(page.getByTestId("save-draft")).toBeDisabled();
+    await expect(page.getByTestId("note-text")).toHaveValue(sentence);
+    await expect(page.getByTestId("status-approved")).toHaveCount(0);
+    expect(await listItems(page, "test")).toEqual([]);
+    await grab(page, `repair-boundary-${theme}-${width}`, { editor: sentence, when, approved: 0, items: 0 });
+    await page.getByTestId("repair-profile").click();
+    await page.getByTestId("setup-continue").click();
+    await page.getByTestId("setup-continue").click();
+    await page.getByTestId("save-profile").click();
+    await expect(page.getByTestId("note-text")).toHaveValue(sentence);
+    await expect(page.getByTestId("schedule")).toHaveText(when);
+    await expect(page.getByTestId("save-draft")).toBeEnabled();
+    await expect(page.getByTestId("status-approved")).toHaveCount(0);
+    expect(await listItems(page, "test")).toEqual([]);
+    expect(readFileSync(kept, "utf8")).toBe(custom);
+    await grab(page, `repaired-${theme}-${width}`, { editor: sentence, when, approved: 0, items: 0 });
+    await page.getByTestId("save-draft").click();
+    await expect(page.getByText("Scheduled for")).toBeVisible();
+    const rows = await listItems(page, "test");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "approved", origin: "manual", preview: sentence });
+    await expect(page.getByTestId("note-text")).toHaveValue("");
+    await expect(page.getByTestId("status-approved")).toHaveCount(1);
+    expect(readFileSync(kept, "utf8")).toBe(custom);
+    await grab(page, `scheduled-${theme}-${width}`, { editor: "", preview: sentence, status: "approved", count: 1 });
+  });
+}
