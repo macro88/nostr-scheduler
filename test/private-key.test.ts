@@ -77,6 +77,7 @@ async function authed(app: ReturnType<typeof createApp>["app"]) {
 function approved(content: string, profile: ReturnType<typeof writeProfile>): Approved {
   return {
     status: "approved",
+    origin: "suggestion",
     id: suggestionId("sug_keyguard1"),
     profileId: profile.id,
     suggesterId: profile.suggesterId,

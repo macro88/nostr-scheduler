@@ -72,7 +72,7 @@ export function acceptSigned(unsigned: UnsignedEvent, value: unknown, pubkey: st
 
 export function fireTimes(item: WorkItem): number[] {
   if (item.status === "discarded") return [];
-  if (item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
+  if (item.status === "draft" || item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
     if (item.draft.type === "thread") return item.draft.segments.map((segment) => segment.proposedFireAt);
     return [item.draft.proposedFireAt];
   }
@@ -81,7 +81,7 @@ export function fireTimes(item: WorkItem): number[] {
 
 export function previewOf(item: WorkItem): string {
   if (item.status === "discarded") return item.reason;
-  if (item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
+  if (item.status === "draft" || item.status === "suggestion" || item.status === "approved" || item.status === "rejected") {
     if (item.draft.type === "thread") return item.draft.segments.map((segment) => segment.content).join("\n");
     return item.draft.content;
   }

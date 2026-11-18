@@ -57,8 +57,10 @@ export function Sign({ profile }: { profile: Profile }) {
     },
     onError: (error: Error) => {
       const plain = plainError(error);
-      setStatus(plain.message);
-      notifyError(plain.message);
+      const httpSigner = window.location.protocol === "http:" && plain.detail.includes("no browser signer");
+      const message = httpSigner ? "This page is HTTP. A browser extension that only runs on HTTPS will not appear here." : plain.message;
+      setStatus(message);
+      notifyError(message);
     },
   });
   const bunker = useMutation({
@@ -165,6 +167,11 @@ export function Sign({ profile }: { profile: Profile }) {
             <div className="sign-progress" aria-hidden="true">
               <span style={{ transform: `scaleX(${steps === 0 ? 0 : step / steps})` }} />
             </div>
+          ) : null}
+          {window.location.protocol === "http:" ? (
+            <p className="field-note" data-testid="http-signer-note">
+              This page is HTTP. A browser extension that only runs on HTTPS will not appear here.
+            </p>
           ) : null}
           <div className="actions">
             <Button type="button" variant="primary" data-testid="sign-browser" onClick={() => browser.mutate()} disabled={browser.isPending || chosen.length === 0}>

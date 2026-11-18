@@ -7,6 +7,7 @@ export function kindWord(type?: string): string {
 export function statusWord(status: string): string {
   const words: Record<string, string> = {
     suggestion: "Draft",
+    draft: "Saved",
     approved: "Approved",
     signed: "Signed",
     queued: "Queued",

@@ -138,6 +138,7 @@ describe("inbox and signing", () => {
     expect(store.transition(rejected.id, { type: "reject", reason: "no-go topic" }, now, profile).status).toBe("rejected");
     expect(store.get(rejected.id).status).toBe("rejected");
     expect(store.list().some((item) => item.status === "rejected")).toBe(true);
+    if (!profile.criteriaPath) throw new Error("fixture criteria");
     const feedback = readFeedback(feedbackPath(profile.criteriaPath, profile.id));
     expect(feedback.map((entry) => entry.action)).toEqual(["edited", "approved", "rejected"]);
     if (approved.status !== "approved") return;
@@ -185,6 +186,7 @@ describe("inbox and signing", () => {
     const profile = writeProfile(tempDir(), signer);
     const item: Approved = {
       status: "approved",
+      origin: "suggestion",
       id: suggestionId("sug_horizon1"),
       profileId: profile.id,
       suggesterId: profile.suggesterId,

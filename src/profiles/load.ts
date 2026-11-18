@@ -45,7 +45,9 @@ function profileOf(value: unknown, dir: string, mode: RuntimeMode): Profile {
   if (typeof value.npub !== "string") throw new InputError("npub", "expected a string");
   if (typeof value.pubkey !== "string") throw new InputError("pubkey", "expected a string");
   if (typeof value.suggester_id !== "string") throw new InputError("suggester_id", "expected a string");
-  if (typeof value.criteria_path !== "string") throw new InputError("criteria_path", "expected a string");
+  if (value.criteria_path !== undefined && value.criteria_path !== null && typeof value.criteria_path !== "string") {
+    throw new InputError("criteria_path", "expected a string");
+  }
   const pubkey = hexPubkey(value.pubkey);
   const encoded = npub(value.npub);
   if (pubkeyFromNpub(encoded) !== pubkey) throw new InputError("npub", "does not match pubkey");
@@ -63,7 +65,10 @@ function profileOf(value: unknown, dir: string, mode: RuntimeMode): Profile {
   if (value.read_nip65 !== undefined && typeof value.read_nip65 !== "boolean") {
     throw new InputError("read_nip65", "expected a boolean");
   }
-  const criteria = criteriaLocation(dir, value.criteria_path);
+  const criteriaPath =
+    typeof value.criteria_path === "string" && value.criteria_path.trim() !== ""
+      ? criteriaLocation(dir, value.criteria_path).absolutePath
+      : null;
   return {
     id: profileId(value.id),
     label: value.label,
@@ -77,7 +82,7 @@ function profileOf(value: unknown, dir: string, mode: RuntimeMode): Profile {
       readNip65,
       allowPublicRelays,
     },
-    criteriaPath: criteria.absolutePath,
+    criteriaPath,
   };
 }
 

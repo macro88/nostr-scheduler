@@ -38,7 +38,7 @@ cd nostr-scheduler
 pnpm install
 ```
 
-Add a profile in `data/profiles.yaml` with its `npub`, signer kind, relay list, suggester id, and the path to its criteria file. Copy `examples/criteria/example-profile.md` and edit it. The format is described in `CRITERIA-FORMAT.md`.
+Add a profile in `data/profiles.yaml` with its `npub`, signer kind, relay list, and suggester id. Omit `criteria_path` when the profile is only for notes you write yourself. A suggester needs a criteria file: copy `examples/criteria/example-profile.md`, edit it, and set `criteria_path`. The format is described in `CRITERIA-FORMAT.md`.
 
 ```yaml
 profiles:
@@ -72,7 +72,11 @@ Send an `npub`. The server derives the hex pubkey and stores it. A hex pubkey in
 
 A relay named inside a `bunker://` link is only the NIP-46 channel. It is not a publish relay, and it is not subject to the public-relay flag. Responses show that link as `bunker://` plus a shortened pubkey. The secret stays in the file and is not returned.
 
-The criteria path has to resolve inside the data directory. The file has to exist before the profile can be saved. Its `profile_id` has to match that profile's id. If the file is missing, or `profile_id` does not match, the save stops and the schedule stops. The error names the file. Correct the file, then retry the same action. A failed schedule does not leave the note approved. It does not publish the note.
+A profile can be saved with no criteria file. The first run asks for a profile name, an npub, and a signing method, then saves. It does not ask for a criteria path. A note you write and schedule is manual: it does not read a criteria file, it does not copy the example, and it does not write suggester feedback. Save without scheduling stores that note as a draft. It is not approved and it is not sent. Schedule is a separate action. A suggester still needs a real criteria file. When `criteria_path` is set, it has to resolve inside the data directory, the file has to exist, and its `profile_id` has to match that profile. A missing or mismatched file stops a suggestion. The error names the file. It does not leave the suggestion approved, and it does not publish the note. A profile whose configured criteria file is missing or does not match can be repaired from Compose. Until that repair, the server refuses to schedule a manual note or to approve a saved draft. Saving the draft still works. Repair keeps the note and the time on the page, leaves any existing criteria file as it is, and does not schedule the note.
+
+The note in the Compose box stays for this visit. A reload clears the box. A draft that was saved stays in the queue until you schedule it. The page does not sign or publish on its own.
+
+On an HTTP page, a browser extension that only runs on HTTPS will not appear. The page says so. It does not start an HTTPS server.
 
 The feedback file and the note row are not one atomic commit. That is a documented limitation, not a guarantee that the two stores commit together. A process crash after the feedback line is written and before the note row commits can leave that line in place. An in-process failure after that write rolls the file back with the note. Approving, rejecting, or marking that same note missed again does not add a second line. A queued note that is already signed can still be marked missed when the criteria file is gone. A note that is not yet due stays queued.
 

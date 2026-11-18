@@ -4,6 +4,7 @@ import type {
   Discarded,
   Draft,
   Failed,
+  ManualDraft,
   Missed,
   NonEmpty,
   PerRelayResult,
@@ -15,9 +16,22 @@ import type {
   WorkItem,
 } from "./types.ts";
 
+export function scheduleManual(item: ManualDraft, at: UnixSeconds): Approved {
+  return {
+    status: "approved",
+    origin: "manual",
+    id: item.id,
+    profileId: item.profileId,
+    draft: item.draft,
+    createdAt: item.createdAt,
+    approvedAt: at,
+  };
+}
+
 export function approve(item: Suggestion, at: UnixSeconds): Approved {
   return {
     status: "approved",
+    origin: "suggestion",
     id: item.id,
     profileId: item.profileId,
     suggesterId: item.suggesterId,
@@ -30,6 +44,7 @@ export function approve(item: Suggestion, at: UnixSeconds): Approved {
 export function reject(item: Suggestion, args: { at: UnixSeconds; reason: string }): Rejected {
   return {
     status: "rejected",
+    origin: "suggestion",
     id: item.id,
     profileId: item.profileId,
     draft: item.draft,
@@ -52,6 +67,7 @@ export function markSigned(
 ): SignedWork {
   return {
     status: "signed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: args.events,
@@ -62,6 +78,7 @@ export function markSigned(
 export function enqueue(item: SignedWork, at: UnixSeconds): Queued {
   return {
     status: "queued",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -78,6 +95,7 @@ export function markSent(
   }
   return {
     status: "sent",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -95,6 +113,7 @@ export function markFailed(
   }
   return {
     status: "failed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -110,6 +129,7 @@ export function markMissed(item: Queued, args: { at: UnixSeconds; lateBySeconds:
   }
   return {
     status: "missed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -124,6 +144,7 @@ export function discard(
 ): Discarded {
   return {
     status: "discarded",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     discardedAt: args.at,
@@ -145,6 +166,10 @@ export type WorkCommand =
 
 export function applyCommand(item: WorkItem, command: WorkCommand, at: UnixSeconds): WorkItem {
   switch (item.status) {
+    case "draft":
+      if (command.type === "edit") return { ...item, draft: command.draft };
+      if (command.type === "approve") return scheduleManual(item, at);
+      break;
     case "suggestion":
       if (command.type === "approve") return approve(item, at);
       if (command.type === "reject") return reject(item, { at, reason: command.reason });

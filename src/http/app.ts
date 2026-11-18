@@ -32,6 +32,7 @@ import {
 import {
   bunkerSchema,
   composeSchema,
+  manualDraftSchema,
   contextSchema,
   discardSchema,
   editSchema,
@@ -67,6 +68,7 @@ function itemView(item: ReturnType<WorkStore["get"]>) {
   return {
     id: item.id,
     profileId: item.profileId,
+    origin: item.origin,
     status: item.status,
     fireAt: fireTimes(item),
     preview: previewOf(item),
@@ -149,6 +151,23 @@ export function createApp(options: AppOptions) {
     });
     notify();
     return c.json(itemView(item));
+  });
+  app.post("/api/drafts", async (c) => {
+    const body = manualDraftSchema.parse(await c.req.json());
+    const owner = profile(body.profileId);
+    const draft = parseDraft(body.draft);
+    if (body.id) {
+      const current = store.get(suggestionId(body.id));
+      if (current.profileId !== owner.id || current.status !== "draft" || current.origin !== "manual") {
+        throw new InputError("id", "That note is not a saved draft.");
+      }
+      const next = store.transition(current.id, { type: "edit", draft }, now(), owner);
+      notify();
+      return c.json(itemView(next));
+    }
+    const saved = store.saveManualDraft({ profile: owner, draft, at: now() });
+    notify();
+    return c.json(itemView(saved));
   });
   app.post("/api/compose", async (c) => {
     const body = composeSchema.parse(await c.req.json());

@@ -21,6 +21,7 @@ const now = unixSeconds(1_700_000_000);
 function suggestion(): Suggestion {
   return {
     status: "suggestion",
+    origin: "suggestion",
     id: "sug_demo0001" as Suggestion["id"],
     profileId: "demo" as Suggestion["profileId"],
     suggesterId: "demo-suggester" as Suggestion["suggesterId"],

@@ -14,8 +14,9 @@ export type Profile = {
   pubkey: string;
   npub?: string;
   signer: { kind: string; bunkerUri?: string; bindHost?: string; platform?: string };
-  criteriaPath?: string;
+  criteriaPath?: string | null;
   criteriaExists?: boolean;
+  criteriaState?: "absent" | "ready" | "invalid";
   readNip65?: boolean;
   allowPublicRelays?: boolean;
   relays?: ProfileRelay[];
