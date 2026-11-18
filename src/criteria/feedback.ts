@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "yaml";
+import { runtimeMode } from "../mode.ts";
 import {
   criteriaVersion,
   InputError,
@@ -13,6 +14,13 @@ import {
 import type { FeedbackAction, FeedbackEntry } from "../domain/types.ts";
 
 const ACTIONS = new Set<FeedbackAction>(["approved", "edited", "rejected", "missed"]);
+const ONCE = new Set<FeedbackAction>(["approved", "rejected", "missed"]);
+let failAfterDurableWrite = false;
+
+export function armFeedbackWriteFailure(): void {
+  if (runtimeMode() !== "test") return;
+  failAfterDurableWrite = true;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -63,10 +71,17 @@ function toYaml(entry: FeedbackEntry): Record<string, unknown> {
 
 export function appendFeedback(path: string, entry: FeedbackEntry): FeedbackEntry[] {
   const existing = readFeedback(path);
+  if (ONCE.has(entry.action) && existing.some((item) => item.suggestionId === entry.suggestionId && item.action === entry.action)) {
+    return existing;
+  }
   const next = [...existing, entry];
   mkdirSync(dirname(path), { recursive: true });
   const body = stringify({ entries: next.map(toYaml) });
   writeFileSync(path, body, { mode: 0o644 });
+  if (failAfterDurableWrite) {
+    failAfterDurableWrite = false;
+    throw new Error("feedback write failed");
+  }
   const written = readFeedback(path);
   for (let i = 0; i < existing.length; i += 1) {
     if (JSON.stringify(written[i]) !== JSON.stringify(existing[i])) {

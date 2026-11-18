@@ -343,7 +343,15 @@ test("a signed item explains that the time is frozen", async ({ page }) => {
   profileFile(signer, url);
   await page.goto("/");
   await clear(page);
-  const fireAt = Math.floor(Date.now() / 1000) + 3600;
+  const fire = new Date();
+  fire.setSeconds(0, 0);
+  if (fire.getHours() >= 16) {
+    fire.setDate(fire.getDate() + 1);
+    fire.setHours(10, 15, 0, 0);
+  } else {
+    fire.setHours(Math.min(Math.max(fire.getHours() + 1, 10), 16), 15, 0, 0);
+  }
+  const fireAt = Math.floor(fire.getTime() / 1000);
   const created = (await post(page, "/api/compose", {
     profileId: "demo",
     draft: { type: "note", content: "Signed and still frozen", proposedFireAt: fireAt },
@@ -356,7 +364,10 @@ test("a signed item explains that the time is frozen", async ({ page }) => {
   store.close();
   await page.reload();
   await page.getByTestId("nav-calendar").click();
-  await page.getByTestId("calendar-item").filter({ hasText: "Signed and still frozen" }).click();
+  const frozen = page.getByTestId("calendar-item").filter({ hasText: "Signed and still frozen" });
+  if (!(await frozen.isVisible())) await page.getByRole("button", { name: "Next" }).click();
+  await frozen.scrollIntoViewIfNeeded();
+  await frozen.click();
   await expect(page.getByTestId("frozen-note")).toHaveText("This event is signed, so the time is frozen. Discard it and sign again to choose a new time.");
   await relay.stop();
 });
