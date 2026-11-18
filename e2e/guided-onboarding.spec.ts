@@ -15,17 +15,55 @@ function wipeData() {
   db.close();
 }
 
+const themeKey = "nostr-scheduler-theme";
+const themeBackground = {
+  light: "rgb(230, 231, 230)",
+  dark: "rgb(20, 21, 21)",
+} as const;
+
+function themeOf(name: string): "light" | "dark" {
+  if (name.includes("-dark-")) return "dark";
+  if (name.includes("-light-")) return "light";
+  throw new Error(`frame name must include -light- or -dark-: ${name}`);
+}
+
+async function paintOf(page: Page) {
+  return page.evaluate((key) => {
+    const root = document.documentElement;
+    const raw = getComputedStyle(document.body).backgroundColor;
+    const match = raw.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    return {
+      scheme: root.dataset.scheme ?? "",
+      themeName: root.dataset.theme ?? "",
+      background: match ? `rgb(${match[1]}, ${match[2]}, ${match[3]})` : raw,
+      stored: localStorage.getItem(key) ?? "",
+    };
+  }, themeKey);
+}
+
+async function assertTheme(page: Page, theme: "light" | "dark") {
+  await expect.poll(() => paintOf(page)).toEqual({
+    scheme: theme,
+    themeName: "nostr",
+    background: themeBackground[theme],
+    stored: theme,
+  });
+  return paintOf(page);
+}
+
 async function frame(page: Page, theme: "light" | "dark", width: number) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-  await page.evaluate((value) => {
-    document.documentElement.dataset.scheme = value;
+  await page.addInitScript((value) => {
+    localStorage.setItem("nostr-scheduler-theme", value);
   }, theme);
 }
 
 async function grab(page: Page, name: string, proof: Record<string, unknown>) {
-  const dir = process.env.SCREENSHOT_DIR?.trim();
+  const theme = themeOf(name);
+  const paint = await assertTheme(page, theme);
   const file = `${name}.png`;
-  console.log(JSON.stringify({ file, ...proof }));
+  console.log(JSON.stringify({ file, scheme: paint.scheme, background: paint.background, stored: paint.stored, ...proof }));
+  const dir = process.env.SCREENSHOT_DIR?.trim();
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: `${dir}/${file}`, animations: "disabled" });
@@ -226,18 +264,71 @@ for (const [theme, width] of frames) {
     await frame(page, theme, width);
     const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
     await page.goto("/");
+    await assertTheme(page, theme);
     await expect(page.getByLabel("Criteria file")).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
     await grab(page, `identity-${theme}-${width}`, { editor: "", queue: "none", approved: 0 });
-    await page.getByLabel("Profile name").fill("Desk");
-    await page.getByLabel("Public identity (npub)").fill(signer.npub);
+    await page.getByTestId("setup-continue").click();
+    const name = page.getByLabel("Profile name");
+    await expect(name).toHaveAttribute("aria-invalid", "true");
+    await expect(name).toHaveAttribute("aria-describedby", /profile-name-error/);
+    await expect(page.locator("#profile-name-error")).toHaveText("Enter a profile name.");
+    await grab(page, `error-name-${theme}-${width}`, {
+      invalid: "true",
+      describedby: "profile-name-error",
+      error: "Enter a profile name.",
+    });
+    await name.fill("Desk");
+    await page.getByTestId("setup-continue").click();
+    const missingNpub = page.getByLabel("Public identity (npub)");
+    await expect(missingNpub).toHaveAttribute("aria-invalid", "true");
+    await expect(missingNpub).toHaveAttribute("aria-describedby", /profile-npub-error/);
+    await expect(page.locator("#profile-npub-error")).toHaveText("Paste an npub starting with npub1.");
+    await grab(page, `error-npub-${theme}-${width}`, {
+      invalid: "true",
+      describedby: "profile-npub-error",
+      error: "Paste an npub starting with npub1.",
+    });
+    await missingNpub.fill(signer.npub);
     await page.getByTestId("setup-continue").click();
     await expect(page.getByTestId("signer-status")).toHaveText("No option is selected yet.");
     await grab(page, `signer-${theme}-${width}`, { connected: false });
+    await page.getByTestId("setup-continue").click();
+    const signerGroup = page.getByRole("radiogroup", { name: "Signing method" });
+    await expect(signerGroup).toHaveAttribute("aria-invalid", "true");
+    await expect(signerGroup).toHaveAttribute("aria-describedby", "signer-kind-error");
+    await expect(page.locator("#signer-kind-error")).toHaveText("Choose a signing method.");
+    await grab(page, `error-signer-${theme}-${width}`, {
+      invalid: "true",
+      describedby: "signer-kind-error",
+      error: "Choose a signing method.",
+    });
     await page.getByRole("radio", { name: "Browser extension" }).click();
     await page.getByTestId("setup-continue").click();
     await expect(page.getByText("Public relays stay off unless you allow them.")).toBeVisible();
     await grab(page, `local-${theme}-${width}`, { criteriaField: 0 });
+    await page.route("**/api/profiles", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "unavailable" }) });
+        return;
+      }
+      await route.continue();
+    });
+    await page.getByTestId("save-profile").click();
+    await expect(page.locator("#setup-error")).toHaveText("The profile could not be saved. Try again.");
+    await expect(page.getByRole("heading", { name: "Local setup" })).toBeVisible();
+    await expect(page.locator("#profile-name-error")).toHaveCount(0);
+    await grab(page, `save-failure-${theme}-${width}`, {
+      alert: "The profile could not be saved. Try again.",
+      fieldError: 0,
+    });
+    await page.unroute("**/api/profiles");
+    await page.getByTestId("setup-back").click();
+    await page.getByTestId("setup-back").click();
+    await expect(page.getByLabel("Profile name")).toHaveValue("Desk");
+    await expect(page.getByTestId("npub-settled")).toBeVisible();
+    await page.getByTestId("setup-continue").click();
+    await page.getByTestId("setup-continue").click();
     await page.getByTestId("save-profile").click();
     await expect(page.getByTestId("profile")).toHaveText("Desk");
     await expect(page.getByTestId("note-text")).toHaveValue("");
@@ -283,6 +374,7 @@ for (const [theme, width] of frames) {
     );
     await frame(page, theme, width);
     await page.goto("/");
+    await assertTheme(page, theme);
     await page.getByTestId("nav-compose").click();
     const sentence = `Keep this sentence ${theme} ${width} ${Date.now()}`;
     await page.getByTestId("note-text").fill(sentence);
