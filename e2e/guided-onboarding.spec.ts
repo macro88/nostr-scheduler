@@ -78,8 +78,23 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.locator("[aria-current='step']")).toHaveText("Profile");
   await expect(page.getByLabel("Criteria file")).toHaveCount(0);
   await page.getByTestId("setup-continue").click();
-  await expect(page.getByText("Enter a profile name.")).toBeVisible();
-  await expect(page.locator("#setup-error")).toBeFocused();
+  const name = page.getByLabel("Profile name");
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await expect(name).toHaveAttribute("aria-describedby", /profile-name-error/);
+  await expect(page.locator("#profile-name-error")).toHaveText("Enter a profile name.");
+  await expect(name).toBeFocused();
+  await page.getByLabel("Profile name").fill("Desk");
+  await page.getByTestId("setup-continue").click();
+  const missingNpub = page.getByLabel("Public identity (npub)");
+  await expect(missingNpub).toHaveAttribute("aria-invalid", "true");
+  await expect(missingNpub).toHaveAttribute("aria-describedby", /profile-npub-error/);
+  await expect(page.locator("#profile-npub-error")).toHaveText("Paste an npub starting with npub1.");
+  await page.getByLabel("Public identity (npub)").fill("hello");
+  await page.getByTestId("setup-continue").click();
+  await expect(page.locator("#profile-npub-error")).toHaveText("That isn't an npub. It starts with npub1.");
+  await page.getByLabel("Public identity (npub)").fill("ab".repeat(32));
+  await page.getByTestId("setup-continue").click();
+  await expect(page.locator("#profile-npub-error")).toHaveText("That looks like a hex key. Paste the npub instead.");
   await page.getByLabel("Profile name").fill("Desk");
   await page.getByLabel("Public identity (npub)").fill(signer.npub);
   await expect(page.getByTestId("npub-settled")).toBeVisible();
@@ -90,7 +105,10 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByTestId("setup-continue")).toBeFocused();
   await page.getByTestId("setup-continue").click();
   await page.getByTestId("setup-continue").click();
-  await expect(page.getByText("Choose a signing method.")).toBeVisible();
+  const signerGroup = page.getByRole("radiogroup", { name: "Signing method" });
+  await expect(signerGroup).toHaveAttribute("aria-invalid", "true");
+  await expect(signerGroup).toHaveAttribute("aria-describedby", "signer-kind-error");
+  await expect(page.locator("#signer-kind-error")).toHaveText("Choose a signing method.");
   await page.getByRole("radio", { name: "Browser extension" }).click();
   await expect(page.getByTestId("signer-status")).toHaveText("Not connected yet. It will be used later, on Sign.");
   await page.getByTestId("setup-continue").click();
@@ -297,3 +315,51 @@ for (const [theme, width] of frames) {
     await grab(page, `scheduled-${theme}-${width}`, { editor: "", preview: sentence, status: "approved", count: 1 });
   });
 }
+
+test("a duplicate identity is described on the npub field", async ({ page }) => {
+  const kept = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  const copy = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  wipeData();
+  const before = [
+    "profiles:",
+    "  - id: copy",
+    "    label: Copy",
+    `    npub: ${copy.npub}`,
+    `    pubkey: ${copy.pubkey}`,
+    "    suggester_id: copy-suggester",
+    "    signer:",
+    "      kind: nip07",
+    "    relays: []",
+    "    read_nip65: false",
+    "    allow_public_relays: false",
+    "    criteria_path: test",
+    "  - id: desk",
+    "    label: Desk",
+    `    npub: ${kept.npub}`,
+    `    pubkey: ${kept.pubkey}`,
+    "    suggester_id: desk-suggester",
+    "    signer:",
+    "      kind: nip07",
+    "    relays: []",
+    "    read_nip65: false",
+    "    allow_public_relays: false",
+    "",
+  ].join("\n");
+  writeFileSync(`${dataDir}/profiles.yaml`, before);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await page.getByTestId("repair-profile").click();
+  await expect(page.getByLabel("Profile name")).toHaveValue("Copy");
+  await page.getByTestId("change-npub").click();
+  await page.getByLabel("Public identity (npub)").fill(kept.npub);
+  await page.getByTestId("setup-continue").click();
+  await page.getByTestId("setup-continue").click();
+  await page.getByTestId("save-profile").click();
+  const field = page.getByLabel("Public identity (npub)");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toHaveAttribute("aria-describedby", /profile-npub-error/);
+  await expect(page.locator("#profile-npub-error")).toHaveText("This npub already has a profile: Desk.");
+  await expect(page.locator("#setup-error")).toHaveCount(0);
+  await expect(page.getByLabel("Profile name")).toHaveValue("Copy");
+  expect(readFileSync(`${dataDir}/profiles.yaml`, "utf8")).toBe(before);
+});

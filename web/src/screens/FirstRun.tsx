@@ -53,57 +53,85 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
   const [readNip65, setReadNip65] = useState(profile?.readNip65 === true);
   const [allowPublic, setAllowPublic] = useState(profile?.allowPublicRelays === true);
   const [askPublic, setAskPublic] = useState(false);
-  const [error, setError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [npubError, setNpubError] = useState("");
+  const [signerError, setSignerError] = useState("");
+  const [formError, setFormError] = useState("");
   const [secret, setSecret] = useState("");
   const [pending, setPending] = useState(false);
   const saving = useRef(false);
   const ticket = useRef(0);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
-  const focusMode = useRef<"title" | "continue" | "error" | "stay">("title");
+  const focusMode = useRef<"title" | "continue" | "name" | "npub" | "signer" | "form" | "stay">("title");
 
   useEffect(() => {
     const mode = focusMode.current;
     focusMode.current = "stay";
     if (mode === "continue") continueRef.current?.focus();
-    else if (mode === "error") document.getElementById("setup-error")?.focus();
+    else if (mode === "name") document.getElementById("profile-name")?.focus();
+    else if (mode === "npub") document.getElementById("profile-npub")?.focus();
+    else if (mode === "signer") document.getElementById("signer-kind-option-0")?.focus();
+    else if (mode === "form") document.getElementById("setup-error")?.focus();
     else if (mode === "title") titleRef.current?.focus();
-  }, [step, error]);
+  }, [step, nameError, npubError, signerError, formError]);
+
+  useEffect(() => {
+    const group = document.querySelector<HTMLElement>('[aria-labelledby="signer-kind-label"]');
+    if (!group) return;
+    if (signerError) {
+      group.setAttribute("aria-invalid", "true");
+      group.setAttribute("aria-describedby", "signer-kind-error");
+    } else {
+      group.removeAttribute("aria-invalid");
+      group.removeAttribute("aria-describedby");
+    }
+  }, [signerError, step]);
 
   function take(value: string, apply: (next: string) => void, field: string) {
     if (containsPrivateKey(value)) {
       apply("");
       setSecret(field);
-      setError("");
+      if (field === "label") setNameError("");
+      if (field === "npub") setNpubError("");
       return;
     }
     if (secret === field) setSecret("");
+    if (field === "label") setNameError("");
+    if (field === "npub") setNpubError("");
     apply(value);
   }
 
-  function identityError(): string {
-    if (!label.trim()) return "Enter a profile name.";
-    if (!npub.trim()) return "Paste an npub starting with npub1.";
-    if (/^[0-9a-fA-F]{64}$/.test(npub.trim())) return "That looks like a hex key. Paste the npub instead.";
-    if (!isNpub(npub.trim())) return "That isn't an npub. It starts with npub1.";
-    return "";
+  function validateIdentity(): boolean {
+    const nextName = label.trim() ? "" : "Enter a profile name.";
+    let nextNpub = "";
+    if (!npub.trim()) nextNpub = "Paste an npub starting with npub1.";
+    else if (/^[0-9a-fA-F]{64}$/.test(npub.trim())) nextNpub = "That looks like a hex key. Paste the npub instead.";
+    else if (!isNpub(npub.trim())) nextNpub = "That isn't an npub. It starts with npub1.";
+    setNameError(nextName);
+    setNpubError(nextNpub);
+    if (nextName) {
+      focusMode.current = "name";
+      return false;
+    }
+    if (nextNpub) {
+      focusMode.current = "npub";
+      return false;
+    }
+    return true;
   }
 
   function continueFrom(index: number) {
-    if (index === 0) {
-      const problem = identityError();
-      if (problem) {
-        setError(problem);
-        focusMode.current = "error";
-        return;
-      }
-    }
+    if (index === 0 && !validateIdentity()) return;
     if (index === 1 && !kind) {
-      setError("Choose a signing method.");
-      focusMode.current = "error";
+      setSignerError("Choose a signing method.");
+      focusMode.current = "signer";
       return;
     }
-    setError("");
+    setNameError("");
+    setNpubError("");
+    setSignerError("");
+    setFormError("");
     setSecret("");
     focusMode.current = "title";
     setStep(index + 1);
@@ -111,7 +139,10 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
 
   function back() {
     ticket.current += 1;
-    setError("");
+    setNameError("");
+    setNpubError("");
+    setSignerError("");
+    setFormError("");
     setSecret("");
     if (step === 0) {
       onExit?.();
@@ -161,11 +192,8 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
 
   async function saveProfile() {
     if (saving.current || !kind) return;
-    const problem = identityError();
-    if (problem) {
+    if (!validateIdentity()) {
       setStep(0);
-      setError(problem);
-      focusMode.current = "error";
       return;
     }
     saving.current = true;
@@ -194,11 +222,14 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
       const message = caught instanceof Error ? caught.message : "";
       if (message.includes("already has a profile")) {
         setStep(0);
-        setError(message.replace(/^npub:\s*/, ""));
+        setNpubOpen(true);
+        setFormError("");
+        setNpubError(message.replace(/^npub:\s*/, ""));
+        focusMode.current = "npub";
       } else {
-        setError("The profile could not be saved. Try again.");
+        setFormError("The profile could not be saved. Try again.");
+        focusMode.current = "form";
       }
-      focusMode.current = "error";
     } finally {
       saving.current = false;
       setPending(false);
@@ -206,7 +237,6 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
   }
 
   const title = steps[step]?.title ?? "Your identity";
-  const alert = error;
 
   return (
     <>
@@ -234,7 +264,7 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
         {step === 0 ? (
           <section aria-labelledby="section-title">
             <p className="setup-lead">Use your existing Nostr identity. Your private key stays in your signer.</p>
-            <Input id="profile-name" label="Profile name" hint="Only you see this." value={label} error={secret === "label" ? secretWarning : undefined} onChange={(event) => take(event.target.value, setLabel, "label")} />
+            <Input id="profile-name" label="Profile name" hint="Only you see this." value={label} error={secret === "label" ? secretWarning : nameError || undefined} onChange={(event) => take(event.target.value, setLabel, "label")} />
             {npubOpen ? (
               <Input
                 id="profile-npub"
@@ -242,7 +272,7 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
                 label="Public identity (npub)"
                 hint="Paste an npub starting with npub1."
                 value={npub}
-                error={secret === "npub" ? secretWarning : undefined}
+                error={secret === "npub" ? secretWarning : npubError || undefined}
                 onChange={(event) =>
                   take(event.target.value, (next) => {
                     setNpub(next);
@@ -262,7 +292,8 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
         {step === 1 ? (
           <section aria-labelledby="section-title">
             <p className="setup-lead">This chooses how notes will be signed. It does not connect a signer yet.</p>
-            <RadioGroup id="signer-kind" label="Signing method" name="signer-kind" options={signerOptions} value={kind} onValueChange={(value) => { setKind(value as SignerKind); setError(""); }} />
+            <RadioGroup id="signer-kind" label="Signing method" name="signer-kind" options={signerOptions} value={kind} onValueChange={(value) => { setKind(value as SignerKind); setSignerError(""); }} />
+            {signerError ? <p id="signer-kind-error" className="error" role="alert">{signerError}</p> : null}
             <p className="field-note" data-testid="signer-status" aria-live="polite">{signerStatus(kind)}</p>
           </section>
         ) : null}
@@ -316,8 +347,8 @@ export function FirstRun({ profile, onSaved, onExit }: { profile?: Profile; onSa
             </details>
           </section>
         ) : null}
-        {alert ? (
-          <p id="setup-error" className="error" role="alert" tabIndex={-1}>{alert}</p>
+        {formError ? (
+          <p id="setup-error" className="error" role="alert" tabIndex={-1}>{formError}</p>
         ) : null}
         <div className="profile-actions">
           {step > 0 || onExit ? (

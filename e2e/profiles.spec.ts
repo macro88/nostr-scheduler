@@ -312,11 +312,15 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByLabel("Profile name").fill("Desk");
   await page.getByLabel("Public identity (npub)").fill("hello");
   await page.getByTestId("setup-continue").click();
-  await expect(page.getByText("That isn't an npub. It starts with npub1.")).toBeVisible();
+  const badNpub = page.getByLabel("Public identity (npub)");
+  await expect(badNpub).toHaveAttribute("aria-invalid", "true");
+  await expect(badNpub).toHaveAttribute("aria-describedby", /profile-npub-error/);
+  await expect(page.locator("#profile-npub-error")).toHaveText("That isn't an npub. It starts with npub1.");
   await shots(page, "error-npub");
   await page.getByLabel("Public identity (npub)").fill(signer.pubkey);
   await page.getByTestId("setup-continue").click();
-  await expect(page.getByText("That looks like a hex key. Paste the npub instead.")).toBeVisible();
+  await expect(page.locator("#profile-npub-error")).toHaveText("That looks like a hex key. Paste the npub instead.");
+  await expect(page.getByLabel("Public identity (npub)")).toHaveAttribute("aria-invalid", "true");
   await shots(page, "error-hex");
 
   await page.getByLabel("Profile name").fill(`keep ${fixture} out`);
@@ -341,7 +345,10 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByTestId("setup-continue").click();
   await expect(page.getByRole("heading", { name: "Signing method" })).toBeFocused();
   await page.getByTestId("setup-continue").click();
-  await expect(page.getByText("Choose a signing method.")).toBeVisible();
+  const signerGroup = page.getByRole("radiogroup", { name: "Signing method" });
+  await expect(signerGroup).toHaveAttribute("aria-invalid", "true");
+  await expect(signerGroup).toHaveAttribute("aria-describedby", "signer-kind-error");
+  await expect(page.locator("#signer-kind-error")).toHaveText("Choose a signing method.");
   await page.getByRole("radio", { name: "Remote signer (bunker)" }).click();
   await expect(page.getByTestId("signer-status")).toHaveText("Not paired. You can pair it after this profile is saved.");
   await expect(page.getByLabel("Bunker link")).toHaveCount(0);
@@ -593,7 +600,11 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
   await page.getByLabel("npub", { exact: true }).fill(other.npub);
   await page.getByRole("radio", { name: "Android signer (NIP-55)" }).click();
   await page.getByTestId("save-profile").click();
-  await expect(page.getByText(`This npub already has a profile: Other.`)).toBeVisible();
+  const duplicate = page.getByLabel("npub", { exact: true });
+  await expect(duplicate).toHaveAttribute("aria-invalid", "true");
+  const duplicateDescribed = (await duplicate.getAttribute("aria-describedby")) ?? "";
+  const duplicateId = duplicateDescribed.split(/\s+/).find((id) => id.endsWith("-error"));
+  await expect(page.locator(`#${duplicateId}`)).toContainText("This npub already has a profile: Other.");
   await settle(page);
   await shots(page, "error-duplicate");
   await axe(page, "settings");
