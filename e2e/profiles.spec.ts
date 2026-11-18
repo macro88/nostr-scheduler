@@ -12,6 +12,48 @@ function profileSlug(label: string): string {
   return /^[a-z0-9]/.test(raw) ? raw.slice(0, 48) : "profile";
 }
 
+async function expectCriteriaDescribed(page: Page, path: string) {
+  const field = page.getByLabel("Criteria file");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  const linked = await field.evaluate((node) => {
+    const ids = (node.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+    return ids.map((id) => {
+      const element = document.getElementById(id);
+      const style = element ? getComputedStyle(element) : null;
+      return { id, role: element?.getAttribute("role") ?? "", text: element?.textContent ?? "", color: style?.color ?? "" };
+    });
+  });
+  const text = linked.map((item) => item.text).join(" ");
+  expect(text).toContain("A path inside the data directory.");
+  expect(text).toContain(path);
+  expect(linked.some((item) => item.role === "alert" && item.text.includes(path))).toBe(true);
+  await field.focus();
+  const paint = await field.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--color-danger-fg)";
+    const danger = getComputedStyle(probe).color;
+    probe.remove();
+    return { border: style.borderTopColor, outline: style.outlineColor, outlineWidth: style.outlineWidth, danger, invalid: node.getAttribute("aria-invalid") };
+  });
+  expect(paint.invalid).toBe("true");
+  expect(paint.border).toBe(paint.danger);
+  expect(paint.outlineWidth).toBe("2px");
+  expect(paint.outline).toBe(paint.danger);
+  const alert = linked.find((item) => item.role === "alert");
+  const alertColor = await page.evaluate((id) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--color-danger-fg)";
+    const danger = getComputedStyle(probe).color;
+    probe.remove();
+    const node = document.getElementById(id);
+    return { color: node ? getComputedStyle(node).color : "", danger };
+  }, alert?.id ?? "");
+  expect(alertColor.color).toBe(alertColor.danger);
+}
+
 function seedCriteria(id: string, file = `${id}.md`) {
   mkdirSync("e2e/run/criteria", { recursive: true });
   writeFileSync(`e2e/run/criteria/${file}`, exampleCriteria.replace("profile_id: example", `profile_id: ${id}`));
@@ -295,7 +337,15 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
 
   await page.getByLabel("Criteria file").fill("missing.md");
   await page.getByLabel("Criteria file").blur();
-  await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to this profile.")).toBeVisible();
+  await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to desk.")).toBeVisible();
+  await expectCriteriaDescribed(page, "missing.md");
+  await shots(page, "error-criteria-missing");
+  mkdirSync("e2e/run/criteria", { recursive: true });
+  writeFileSync("e2e/run/criteria/demo.md", exampleCriteria);
+  await page.getByLabel("Criteria file").fill("criteria/demo.md");
+  await page.getByLabel("Criteria file").blur();
+  await expect(page.getByText("criteria/demo.md has profile_id example. Set profile_id to desk and save again.")).toBeVisible();
+  await expectCriteriaDescribed(page, "criteria/demo.md");
   await shots(page, "error-criteria");
   seedCriteria("desk", "demo.md");
   await page.getByLabel("Criteria file").fill("criteria/demo.md");

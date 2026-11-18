@@ -74,6 +74,8 @@ A relay named inside a `bunker://` link is only the NIP-46 channel. It is not a 
 
 A profile can be saved with no criteria file. A note you write and schedule is manual: it does not read that file, it does not copy the example, and it does not write suggester feedback. A suggester still needs a real criteria file. When `criteria_path` is set, it has to resolve inside the data directory, the file has to exist, and its `profile_id` has to match that profile. A missing or mismatched file stops the suggestion. The error names the file. It does not leave the suggestion approved, and it does not publish the note.
 
+The feedback file and the note row are not one atomic commit. That is a documented limitation, not a guarantee that the two stores commit together. A process crash after the feedback line is written and before the note row commits can leave that line in place. An in-process failure after that write rolls the file back with the note. Approving, rejecting, or marking that same note missed again does not add a second line. A queued note that is already signed can still be marked missed when the criteria file is gone. A note that is not yet due stays queued.
+
 `pnpm demo:local` checks the local path. It uses the mock signer and a relay on `127.0.0.1`. The summary lines `sent-on-relay`, `future-on-relay`, and `missed-on-relay` are the relay read-back. The demo criteria file uses the demo profile id. Do not point that command at a public relay.
 
 If a profile already lists a public relay and does not set `allow_public_relays: true`, that relay is no longer used for publishing. Set the flag to keep using it.

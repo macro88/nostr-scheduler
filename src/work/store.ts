@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { appendFeedback, feedbackEntry, feedbackPath } from "../criteria/feedback.ts";
 import { parseCriteria } from "../criteria/parse.ts";
 import { assertCriteriaReady } from "../criteria/readiness.ts";
+import { runtimeMode } from "../mode.ts";
 import {
   InputError,
   profileId,
@@ -152,6 +153,13 @@ export function parseWorkItem(value: unknown): WorkItem {
   throw new Error(`unknown status ${value.status}`);
 }
 
+let failFeedbackRestore = false;
+
+export function armFeedbackRestoreFailure(): void {
+  if (runtimeMode() !== "test") return;
+  failFeedbackRestore = true;
+}
+
 function feedbackActionFor(command: WorkCommand): FeedbackAction | null {
   if (command.type === "approve") return "approved";
   if (command.type === "edit") return "edited";
@@ -267,11 +275,11 @@ export class WorkStore {
     if (command.type === "sign" && command.events.some((event) => containsPrivateKey(event.content))) {
       throw new PrivateKeyInContentError();
     }
-    return this.atomic(() => {
+    const saved = this.atomic(() => {
       const current = this.get(id);
       const feedbackAction = feedbackActionFor(command);
-      const logsFeedback = Boolean(profile && feedbackAction && current.origin !== "manual");
-      if (logsFeedback && profile && feedbackAction) this.requireCriteria(profile);
+      const logsFeedback = Boolean(profile && feedbackAction && current.origin !== "manual" && command.type !== "missed");
+      if (logsFeedback && profile) this.requireCriteria(profile);
       const next = applyCommand(current, command, at);
       const before = signedEventsOf(current);
       const after = signedEventsOf(next);
@@ -287,6 +295,8 @@ export class WorkStore {
       this.save(next);
       return next;
     });
+    if (command.type === "missed" && profile && this.get(id).origin !== "manual") this.noteMissed(profile, id, at);
+    return saved;
   }
 
   recordPublish(args: {
@@ -359,14 +369,25 @@ export class WorkStore {
   }
 
   private restoreSnapshots(): void {
-    for (const [path, bytes] of this.snapshots) {
-      if (bytes === null) {
-        if (existsSync(path)) unlinkSync(path);
-      } else {
-        writeFileSync(path, bytes);
+    const pending = [...this.snapshots.entries()];
+    this.snapshots.clear();
+    if (failFeedbackRestore) {
+      failFeedbackRestore = false;
+      throw new Error("feedback restore failed");
+    }
+    const failed: string[] = [];
+    for (const [path, bytes] of pending) {
+      try {
+        if (bytes === null) {
+          if (existsSync(path)) unlinkSync(path);
+        } else {
+          writeFileSync(path, bytes);
+        }
+      } catch {
+        failed.push(this.safeName(path));
       }
     }
-    this.snapshots.clear();
+    if (failed.length > 0) throw new Error(`Could not restore feedback at ${failed.join(", ")}.`);
   }
 
   private atomic<T>(run: () => T): T {
@@ -385,7 +406,13 @@ export class WorkStore {
         } catch {
           // The transaction is already closed.
         }
-        this.restoreSnapshots();
+        try {
+          this.restoreSnapshots();
+        } catch (restoreError) {
+          const first = error instanceof Error ? error.message : "save failed";
+          const second = restoreError instanceof Error ? restoreError.message : "restore failed";
+          throw new Error(`${first}. ${second}`);
+        }
       }
       throw error;
     } finally {
@@ -396,6 +423,15 @@ export class WorkStore {
   private criteriaFile(profile: Profile): string {
     if (!profile.criteriaPath) throw new InputError("criteria_path", "This profile has no criteria for suggestions.");
     return profile.criteriaPath;
+  }
+
+  private noteMissed(profile: Profile, id: SuggestionId, at: UnixSeconds): void {
+    try {
+      this.requireCriteria(profile);
+      this.logFeedback(profile, id, "missed", at, { type: "missed", lateBySeconds: 0 });
+    } catch {
+      // The signed note is already missed. A missing criteria file does not put it back on the queue.
+    }
   }
 
   private logFeedback(profile: Profile, id: SuggestionId, action: FeedbackAction, at: UnixSeconds, command: WorkCommand): void {

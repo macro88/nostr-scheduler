@@ -110,6 +110,10 @@ function takenIds(entries: readonly Record<string, unknown>[], except?: string):
   return ids;
 }
 
+export function profileIdFromLabel(label: string, taken: ReadonlySet<string>): ProfileId {
+  return profileId(nextId(label, new Set(taken)));
+}
+
 function nextId(label: string, taken: Set<string>): string {
   const raw = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   const stem = /^[a-z0-9]/.test(raw) ? raw.slice(0, 48) : "profile";
