@@ -11,30 +11,14 @@ const PAGE = `<!doctype html>
 async function provider() {
   const ready = () => window.nostr && typeof window.nostr.signEvent === "function";
   if (ready()) return window.nostr;
-  if (window.nostr) return null;
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(ready() ? window.nostr : null), 1000);
-    let current = window.nostr;
-    try {
-      Object.defineProperty(window, "nostr", {
-        configurable: true,
-        enumerable: true,
-        get() { return current; },
-        set(value) {
-          current = value;
-          if (ready()) {
-            clearTimeout(timer);
-            resolve(window.nostr);
-          }
-        },
-      });
-    } catch {
-      /* keep the timeout read */
-    }
-    if (ready()) {
+    if (document.readyState === "complete") return;
+    window.addEventListener("load", () => {
+      if (!ready()) return;
       clearTimeout(timer);
       resolve(window.nostr);
-    }
+    }, { once: true });
   });
 }
 async function run() {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { browserSignerForClick, runBrowserSign, type SignerHost } from "../web/src/browser-signer.ts";
+import { acceptedSignerIdentity, browserSignerForClick, runBrowserSign, type SignerHost } from "../web/src/browser-signer.ts";
 import { plainError } from "../web/src/errors.ts";
 
 function host(): SignerHost & { nostr?: { signEvent?: (event: unknown) => Promise<unknown>; getPublicKey?: () => Promise<string> } } {
@@ -128,5 +128,62 @@ describe("browser signer on a click", () => {
     release();
     await expect(pending).rejects.toThrow("signer cancelled");
     expect(submitted).toBe(false);
+  });
+
+  test("a getter-backed provider is reread and its descriptor stays", async () => {
+    const page = host();
+    let value: unknown;
+    const getter = () => value;
+    Object.defineProperty(page, "nostr", { configurable: true, enumerable: true, get: getter });
+    const before = Object.getOwnPropertyDescriptor(page, "nostr");
+    const pending = browserSignerForClick({ host: page, signal: new AbortController().signal, waitMs: 80 });
+    setTimeout(() => {
+      value = { signEvent: () => Promise.resolve({ from: "getter" }) };
+    }, 20);
+    const signer = await pending;
+    const after = Object.getOwnPropertyDescriptor(page, "nostr");
+    expect(after?.get).toBe(before?.get);
+    expect(after?.set).toBe(before?.set);
+    await expect(signer.signEvent({})).resolves.toEqual({ from: "getter" });
+  });
+
+  test("signEvent can appear on the object during the wait", async () => {
+    const page = host();
+    const provider: { signEvent?: (event: unknown) => Promise<unknown>; getPublicKey?: () => Promise<string> } = {
+      getPublicKey() {
+        return Promise.reject(new Error("getPublicKey"));
+      },
+    };
+    page.nostr = provider;
+    const before = Object.getOwnPropertyDescriptor(page, "nostr");
+    const pending = browserSignerForClick({ host: page, signal: new AbortController().signal, waitMs: 80 });
+    setTimeout(() => {
+      provider.signEvent = () => Promise.resolve({ inplace: true });
+    }, 15);
+    await expect(pending.then((signer) => signer.signEvent({}))).resolves.toEqual({ inplace: true });
+    expect(Object.getOwnPropertyDescriptor(page, "nostr")).toEqual(before);
+  });
+
+  test("timeout and cancel leave the original descriptor in place", async () => {
+    const page = host();
+    const getter = () => undefined;
+    Object.defineProperty(page, "nostr", { configurable: true, enumerable: true, get: getter });
+    const before = Object.getOwnPropertyDescriptor(page, "nostr");
+    await expect(browserSignerForClick({ host: page, signal: new AbortController().signal, waitMs: 30 })).rejects.toThrow("no browser signer");
+    expect(Object.getOwnPropertyDescriptor(page, "nostr")?.get).toBe(before?.get);
+    const controller = new AbortController();
+    const pending = browserSignerForClick({ host: page, signal: controller.signal, waitMs: 400 });
+    controller.abort();
+    await expect(pending).rejects.toThrow("signer cancelled");
+    expect(Object.getOwnPropertyDescriptor(page, "nostr")?.get).toBe(getter);
+  });
+
+  test("a signature for another pubkey is not this profile", () => {
+    const pubkey = "ab".repeat(32);
+    expect(acceptedSignerIdentity({ pubkey }, pubkey)).toBe(true);
+    expect(acceptedSignerIdentity({ pubkey: "cd".repeat(32) }, pubkey)).toBe(false);
+    expect(plainError(new Error("signer identity changed")).message).toBe(
+      "The signer used a different identity. Sign again with this profile.",
+    );
   });
 });

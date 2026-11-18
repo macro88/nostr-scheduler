@@ -30,6 +30,9 @@ export function plainError(error: unknown): PlainError {
   if (text.includes("signer permission denied")) {
     return { message: "The signer did not allow this note.", detail };
   }
+  if (text.includes("signer identity changed")) {
+    return { message: "The signer used a different identity. Sign again with this profile.", detail };
+  }
   if (text.includes("signer cancelled")) {
     return { message: "Signing was cancelled.", detail };
   }

@@ -31,66 +31,41 @@ export function browserSignerForClick(args: {
   const host = args.host;
   const ready = readBrowserSigner(host);
   if (ready) return Promise.resolve(ready);
-  if (classifyBrowserSigner(host.nostr) === "incompatible") {
-    return Promise.reject(new Error("incompatible browser signer"));
-  }
   return new Promise((resolve, reject) => {
     let settled = false;
-    let current = host.nostr;
-    let getter: (() => unknown) | null = null;
     const finish = (error: Error | null, signer?: BrowserSigner) => {
       if (settled) return;
       settled = true;
+      host.clearTimeout(timer);
+      args.signal.removeEventListener("abort", onAbort);
+      host.removeEventListener?.("load", onLoad);
       if (signer) resolve(signer);
       else reject(error ?? new Error("no browser signer"));
-      queueMicrotask(cleanup);
     };
-    const check = () => {
+    const check = (final: boolean) => {
       if (args.signal.aborted) {
         finish(new Error("signer cancelled"));
         return;
       }
       const found = readBrowserSigner(host);
-      if (found) finish(null, found);
-      else if (classifyBrowserSigner(host.nostr) === "incompatible") finish(new Error("incompatible browser signer"));
-    };
-    const descriptor = Object.getOwnPropertyDescriptor(host, "nostr");
-    if (!descriptor || descriptor.configurable) {
-      getter = () => current;
-      try {
-        Object.defineProperty(host, "nostr", {
-          configurable: true,
-          enumerable: true,
-          get: getter,
-          set(value) {
-            current = value;
-            check();
-          },
-        });
-      } catch {
-        getter = null;
+      if (found) {
+        finish(null, found);
+        return;
       }
-    }
-    const onAbort = () => finish(new Error("signer cancelled"));
+      if (!final) return;
+      finish(new Error(classifyBrowserSigner(host.nostr) === "incompatible" ? "incompatible browser signer" : "no browser signer"));
+    };
+    const onAbort = () => check(true);
+    const onLoad = () => check(false);
     args.signal.addEventListener("abort", onAbort);
-    const onLoad = () => check();
     if (host.document && host.document.readyState !== "complete") host.addEventListener?.("load", onLoad);
-    const timer = host.setTimeout(() => {
-      check();
-      if (!settled) finish(new Error("no browser signer"));
-    }, args.waitMs ?? browserSignerWaitMs);
-    function cleanup() {
-      host.clearTimeout(timer);
-      args.signal.removeEventListener("abort", onAbort);
-      host.removeEventListener?.("load", onLoad);
-      if (!getter) return;
-      const now = Object.getOwnPropertyDescriptor(host, "nostr");
-      if (!now?.configurable || now.get !== getter) return;
-      delete host.nostr;
-      if (current !== undefined) host.nostr = current;
-    }
-    check();
+    const timer = host.setTimeout(() => check(true), args.waitMs ?? browserSignerWaitMs);
   });
+}
+
+export function acceptedSignerIdentity(signed: unknown, expectedPubkey: string): boolean {
+  if (typeof signed !== "object" || signed === null || !("pubkey" in signed)) return false;
+  return (signed as { pubkey?: unknown }).pubkey === expectedPubkey;
 }
 
 let browserSign: { controller: AbortController; promise: Promise<number> } | null = null;

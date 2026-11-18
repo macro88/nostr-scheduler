@@ -257,3 +257,29 @@ test("leaving Sign drops a signature that arrives later", async ({ page }) => {
   expect(note?.status).toBe("approved");
   await relay.stop();
 });
+
+test("a signature from another pubkey is not submitted", async ({ page }) => {
+  const relay = new LocalRelay();
+  const url = await relay.start();
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  profileFile(signer, url);
+  await page.addInitScript(() => {
+    (window as Window & { nostr?: { signEvent: (event: unknown) => Promise<unknown> } }).nostr = {
+      signEvent: (event) => Promise.resolve({ ...(event as object), pubkey: "ab".repeat(32) }),
+    };
+  });
+  await page.goto("/");
+  const fireAt = Math.floor(Date.now() / 1000) + 180;
+  await post(page, "/api/compose", {
+    profileId: "demo",
+    draft: { type: "note", content: "Other identity note", proposedFireAt: fireAt },
+  });
+  await page.reload();
+  await page.getByTestId("nav-sign").click();
+  await expect(page.getByText("Other identity note")).toBeVisible();
+  await page.getByTestId("sign-browser").click();
+  await expect(page.getByTestId("sign-status")).toContainText("different identity");
+  const note = (await items(page)).find((item) => item.preview.includes("Other identity note"));
+  expect(note?.status).toBe("approved");
+  await relay.stop();
+});

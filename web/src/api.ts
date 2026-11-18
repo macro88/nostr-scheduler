@@ -1,4 +1,4 @@
-import { browserSignerForClick, permissionDenied, runBrowserSign } from "./browser-signer";
+import { acceptedSignerIdentity, browserSignerForClick, permissionDenied, runBrowserSign } from "./browser-signer";
 import type { Unsigned } from "./nostr";
 
 export type ProfileRelay = {
@@ -77,11 +77,11 @@ export function cancelBrowserSign(): void {
   runBrowserSign.cancel();
 }
 
-export function signWithBrowser(profileId: string, onStep?: (index: number) => void, itemIds?: string[]): Promise<number> {
-  return runBrowserSign((signal) => signLoaded(profileId, signal, onStep, itemIds));
+export function signWithBrowser(profileId: string, onStep?: (index: number) => void, itemIds?: string[], expectedPubkey?: string): Promise<number> {
+  return runBrowserSign((signal) => signLoaded(profileId, signal, onStep, itemIds, expectedPubkey ?? ""));
 }
 
-async function signLoaded(profileId: string, signal: AbortSignal, onStep?: (index: number) => void, itemIds?: string[]): Promise<number> {
+async function signLoaded(profileId: string, signal: AbortSignal, onStep?: (index: number) => void, itemIds?: string[], expectedPubkey = ""): Promise<number> {
   const provider = await browserSignerForClick({ host: window, signal });
   let count = 0;
   let step = 0;
@@ -104,6 +104,7 @@ async function signLoaded(profileId: string, signal: AbortSignal, onStep?: (inde
       throw error;
     }
     if (signal.aborted) throw new Error("signer cancelled");
+    if (expectedPubkey && !acceptedSignerIdentity(signed, expectedPubkey)) throw new Error("signer identity changed");
     const saved = await api<{ done: boolean }>("/api/sign/nip07/submit", {
       method: "POST",
       body: JSON.stringify({ itemId: next.itemId, event: signed }),

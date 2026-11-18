@@ -223,7 +223,9 @@ describe("nip07", () => {
     expect(opened.session.page.includes(["ns", "ec"].join(""))).toBe(false);
     expect(opened.session.page).not.toMatch(/type="password"/);
     const page = await fetch(opened.session.url);
-    expect(await page.text()).toContain("window.nostr");
+    const html = await page.text();
+    expect(html).toContain("window.nostr");
+    expect(html).not.toContain("defineProperty");
     const pending = await fetch(new URL("/pending", opened.session.url));
     expect((await pending.json()).event.content).toBe("page");
     const signed = await signer.signEvent(unsigned);

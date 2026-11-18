@@ -47,7 +47,7 @@ export function Sign({ profile }: { profile: Profile }) {
       signWithBrowser(profile.id, (index) => {
         setStep(index);
         setStatus(steps > 1 ? `Waiting for the signer. ${index} of ${steps}` : "Waiting for the signer");
-      }, selected),
+      }, selected, profile.pubkey),
     onSuccess: (count) => {
       const button = document.querySelector<HTMLElement>("[data-testid='sign-browser']");
       if (button) showCheck(button);
