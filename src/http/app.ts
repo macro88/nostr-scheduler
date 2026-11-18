@@ -153,14 +153,11 @@ export function createApp(options: AppOptions) {
   app.post("/api/compose", async (c) => {
     const body = composeSchema.parse(await c.req.json());
     const owner = profile(body.profileId);
-    const suggested = store.suggest({
+    const approved = store.composeLocal({
       profile: owner,
-      suggesterId: owner.suggesterId,
       draft: parseDraft(body.draft),
-      rationale: "composed locally",
       at: now(),
     });
-    const approved = store.transition(suggested.id, { type: "approve" }, now(), owner);
     notify();
     return c.json(itemView(approved));
   });

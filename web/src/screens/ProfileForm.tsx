@@ -114,7 +114,7 @@ export function ProfileForm({
   const [npub, setNpub] = useState(profile?.npub ?? "");
   const [npubOpen, setNpubOpen] = useState(!profile?.npub);
   const [criteria, setCriteria] = useState(profile?.criteriaPath ?? "");
-  const [criteriaMissing, setCriteriaMissing] = useState(profile ? profile.criteriaExists === false : false);
+  const [criteriaDetail, setCriteriaDetail] = useState("");
   const [kind, setKind] = useState<SignerKind>(profile?.signer.kind === "nip07" || profile?.signer.kind === "nip46" || profile?.signer.kind === "nip55" ? profile.signer.kind : "");
   const [bunker, setBunker] = useState("");
   const [settled, setSettled] = useState(Boolean(profile?.signer.kind === "nip46" && profile.signer.bunkerUri && profile.signer.bunkerUri.length > "bunker://".length));
@@ -182,17 +182,24 @@ export function ProfileForm({
 
   async function lookAtCriteria(path: string) {
     if (!path.trim()) {
-      setCriteriaMissing(false);
+      setCriteriaDetail("");
       return;
     }
     try {
-      const body = await api<{ exists: boolean }>(`/api/criteria-path?path=${encodeURIComponent(path.trim())}`);
-      setCriteriaMissing(!body.exists);
+      const query = new URLSearchParams({ path: path.trim() });
+      if (profile?.id) query.set("profileId", profile.id);
+      const body = await api<{ detail: string }>(`/api/criteria-path?${query.toString()}`);
+      setCriteriaDetail(body.detail);
       setFormError("");
     } catch (error) {
       setFormError(plain(error));
     }
   }
+
+  useEffect(() => {
+    if (!profile?.criteriaPath) return;
+    void lookAtCriteria(profile.criteriaPath);
+  }, [profile?.id, profile?.criteriaPath]);
 
   async function probe(url: string) {
     if (!loopbackUrl(url)) return;
@@ -418,7 +425,7 @@ export function ProfileForm({
           onChange={(event) => take("criteria", event.target.value, setCriteria)}
           onBlur={() => void lookAtCriteria(criteria)}
         />
-        {criteriaMissing ? <p className="field-note">No file at that path in the data directory.</p> : null}
+        {criteriaDetail ? <p className="field-note">{criteriaDetail}</p> : null}
       </section>
       <section aria-labelledby="signer-section">
         <h2 id="signer-section">Signer</h2>

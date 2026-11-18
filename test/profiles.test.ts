@@ -74,7 +74,7 @@ describe("profiles", () => {
 
   test("decodes an npub and rejects hex or an invalid npub", async () => {
     const dir = tempDir();
-    criteria(dir);
+    criteria(dir, "desk");
     const signer = createMockSigner();
     const { app, close } = createApp({ dataDir: dir });
     const api = await authed(app);
@@ -113,7 +113,7 @@ describe("profiles", () => {
 
   test("flags a public publish relay unless the profile opts in", async () => {
     const dir = tempDir();
-    criteria(dir);
+    criteria(dir, "desk");
     const signer = createMockSigner();
     const { app, close } = createApp({ dataDir: dir });
     const api = await authed(app);
@@ -129,9 +129,11 @@ describe("profiles", () => {
     });
     const allowedBody = (await allowed.json()) as { relays: { publish: boolean }[] };
     expect(allowedBody.relays[0]?.publish).toBe(true);
-    const loopback = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), "ws://localhost:9"), label: "Local" });
+    writeFileSync(join(dir, "local.md"), example.replace("profile_id: example", "profile_id: local"));
+    const loopback = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), "ws://localhost:9"), label: "Local", criteriaPath: "local.md" });
     expect(loopback.status).toBe(201);
-    const v6 = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), "ws://[::1]:4242"), label: "V6" });
+    writeFileSync(join(dir, "v6.md"), example.replace("profile_id: example", "profile_id: v6"));
+    const v6 = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), "ws://[::1]:4242"), label: "V6", criteriaPath: "v6.md" });
     const v6Body = (await v6.json()) as { relays: { publish: boolean; public: boolean }[] };
     expect(v6.status, JSON.stringify(v6Body)).toBe(201);
     expect(v6Body.relays[0]).toMatchObject({ publish: true, public: false });
@@ -206,7 +208,7 @@ describe("profiles", () => {
 
   test("keeps unknown yaml fields across an update", async () => {
     const dir = tempDir();
-    criteria(dir);
+    criteria(dir, "desk");
     const signer = createMockSigner();
     writeFileSync(
       join(dir, "profiles.yaml"),
@@ -254,7 +256,7 @@ describe("profiles", () => {
 
   test("discards queued and signed notes when a profile is removed, and confirms an empty profile", async () => {
     const dir = tempDir();
-    criteria(dir);
+    criteria(dir, "desk");
     const relay = new LocalRelay();
     const url = await relay.start();
     const signer = createMockSigner();
@@ -263,7 +265,8 @@ describe("profiles", () => {
     const api = await authed(app);
     const created = await api.send("POST", "/api/profiles", bodyOf(signer, url));
     const saved = (await created.json()) as { id: string };
-    const quiet = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), url), label: "Quiet" });
+    writeFileSync(join(dir, "quiet.md"), example.replace("profile_id: example", "profile_id: quiet"));
+    const quiet = await api.send("POST", "/api/profiles", { ...bodyOf(createMockSigner(), url), label: "Quiet", criteriaPath: "quiet.md" });
     const quietBody = (await quiet.json()) as { id: string };
     const profile = loadProfiles(join(dir, "profiles.yaml"), { NOSTR_SCHEDULER_MODE: "test" }).find((item) => item.id === saved.id);
     if (!profile) throw new Error("missing profile");
@@ -328,7 +331,7 @@ describe("profiles", () => {
 
   test("masks a bunker link and does not treat its relay as a publish relay", async () => {
     const dir = tempDir();
-    criteria(dir);
+    criteria(dir, "desk");
     watchConsole();
     const remote = "ab".repeat(32);
     const secret = "pairing-secret-value";

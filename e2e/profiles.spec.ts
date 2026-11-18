@@ -1,10 +1,21 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
 
 const fixture = "nsec1notarealkeyxxxxxxxx";
+const exampleCriteria = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
+
+function profileSlug(label: string): string {
+  const raw = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return /^[a-z0-9]/.test(raw) ? raw.slice(0, 48) : "profile";
+}
+
+function seedCriteria(id: string, file = `${id}.md`) {
+  mkdirSync("e2e/run/criteria", { recursive: true });
+  writeFileSync(`e2e/run/criteria/${file}`, exampleCriteria.replace("profile_id: example", `profile_id: ${id}`));
+}
 
 function screenshotDir(): string | undefined {
   const dir = process.env.SCREENSHOT_DIR?.trim();
@@ -206,8 +217,10 @@ async function emptyProfiles(page: Page) {
 }
 
 async function createProfile(page: Page, label: string, npub: string, relayUrl: string) {
+  const id = profileSlug(label);
+  seedCriteria(id);
   await page.evaluate(
-    async ({ label, npub, relayUrl }) => {
+    async ({ label, npub, relayUrl, criteriaPath }) => {
       const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
       const response = await fetch("/api/profiles", {
         method: "POST",
@@ -216,13 +229,13 @@ async function createProfile(page: Page, label: string, npub: string, relayUrl: 
           label,
           npub,
           signer: { kind: "nip07" },
-          criteriaPath: "criteria/demo.md",
+          criteriaPath,
           relays: [relayUrl],
         }),
       });
       if (!response.ok) throw new Error(await response.text());
     },
-    { label, npub, relayUrl },
+    { label, npub, relayUrl, criteriaPath: `criteria/${id}.md` },
   );
 }
 
@@ -282,8 +295,9 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
 
   await page.getByLabel("Criteria file").fill("missing.md");
   await page.getByLabel("Criteria file").blur();
-  await expect(page.getByText("No file at that path in the data directory.")).toBeVisible();
+  await expect(page.getByText("No file at missing.md. Copy examples/criteria/example-profile.md to that path and set profile_id to this profile.")).toBeVisible();
   await shots(page, "error-criteria");
+  seedCriteria("desk", "demo.md");
   await page.getByLabel("Criteria file").fill("criteria/demo.md");
 
   await page.getByRole("textbox", { name: "Relay", exact: true }).fill("https://nope.example");
@@ -510,7 +524,8 @@ test("profile setup covers the form, the opt-in, and removal", async ({ page }) 
 
   await page.getByLabel("Label").fill("Other");
   await page.getByRole("radio", { name: "Browser signer (NIP-07)" }).click();
-  await page.getByLabel("Criteria file").fill("criteria/demo.md");
+  seedCriteria("other");
+  await page.getByLabel("Criteria file").fill("criteria/other.md");
   await page.getByLabel("npub", { exact: true }).fill(other.npub);
   await expect(page.getByTestId("npub-settled")).toBeVisible();
   await page.getByRole("textbox", { name: "Relay", exact: true }).fill(url);
@@ -540,11 +555,16 @@ test("the settings list keeps the current profile in full ink", async ({ page })
   const second = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
   await page.goto("/");
   await emptyProfiles(page);
+  seedCriteria("desk");
+  seedCriteria("field");
   await page.evaluate(
     async ({ firstNpub, secondNpub, relayUrl }) => {
       const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
       const headers = { "content-type": "application/json", "x-csrf-token": session.token };
-      for (const [label, npub] of [["Desk", firstNpub], ["Field", secondNpub]] as const) {
+      for (const [label, npub, criteriaPath] of [
+        ["Desk", firstNpub, "criteria/desk.md"],
+        ["Field", secondNpub, "criteria/field.md"],
+      ] as const) {
         await fetch("/api/profiles", {
           method: "POST",
           headers,
@@ -552,7 +572,7 @@ test("the settings list keeps the current profile in full ink", async ({ page })
             label,
             npub,
             signer: { kind: "nip07" },
-            criteriaPath: "criteria/demo.md",
+            criteriaPath,
             relays: [relayUrl],
           }),
         });
@@ -715,6 +735,7 @@ test("a bunker link is masked and the secret is not in the page", async ({ page 
   const bunkerUri = `bunker://${remote}?relay=${encodeURIComponent("wss://relay.example")}&secret=${secret}`;
   await page.goto("/");
   await emptyProfiles(page);
+  seedCriteria("bunker");
   await page.evaluate(
     async ({ npub, bunkerUri: uri }) => {
       const session = (await fetch("/api/session").then((response) => response.json())) as { token: string };
@@ -725,7 +746,7 @@ test("a bunker link is masked and the secret is not in the page", async ({ page 
           label: "Bunker",
           npub,
           signer: { kind: "nip46", bunkerUri: uri },
-          criteriaPath: "criteria/demo.md",
+          criteriaPath: "criteria/bunker.md",
           relays: ["ws://127.0.0.1:9"],
         }),
       });

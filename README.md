@@ -72,7 +72,9 @@ Send an `npub`. The server derives the hex pubkey and stores it. A hex pubkey in
 
 A relay named inside a `bunker://` link is only the NIP-46 channel. It is not a publish relay, and it is not subject to the public-relay flag. Responses show that link as `bunker://` plus a shortened pubkey. The secret stays in the file and is not returned.
 
-The criteria path has to resolve inside the data directory. The file does not have to exist yet. The profile says whether it does.
+The criteria path has to resolve inside the data directory. The file has to exist before the profile can be saved. Its `profile_id` has to match that profile's id. If the file is missing, or `profile_id` does not match, the save stops and the schedule stops. The error names the file. Correct the file, then retry the same action. A failed schedule does not leave the note approved. It does not publish the note.
+
+`pnpm demo:local` checks the local path. It uses the mock signer and a relay on `127.0.0.1`. The summary lines `sent-on-relay`, `future-on-relay`, and `missed-on-relay` are the relay read-back. The demo criteria file uses the demo profile id. Do not point that command at a public relay.
 
 If a profile already lists a public relay and does not set `allow_public_relays: true`, that relay is no longer used for publishing. Set the flag to keep using it.
 
