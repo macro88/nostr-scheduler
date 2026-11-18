@@ -6,6 +6,7 @@ import { appendFeedback, feedbackEntry, feedbackPath } from "../criteria/feedbac
 import { parseCriteria } from "../criteria/parse.ts";
 import { assertCriteriaReady } from "../criteria/readiness.ts";
 import {
+  InputError,
   profileId,
   relayUrl,
   suggestionId,
@@ -44,14 +45,33 @@ export function parseWorkItem(value: unknown): WorkItem {
   const base = { id, profileId: profile };
   if (value.status === "suggestion" || value.status === "approved") {
     const draft = parseDraft(value.draft);
-    const suggester = suggesterId(String(value.suggesterId));
     const createdAt = unixSeconds(Number(value.createdAt));
+    if (value.status === "approved" && value.origin === "manual") {
+      return {
+        ...base,
+        status: "approved",
+        origin: "manual",
+        draft,
+        createdAt,
+        approvedAt: unixSeconds(Number(value.approvedAt)),
+      };
+    }
+    const suggester = suggesterId(String(value.suggesterId));
     if (value.status === "suggestion") {
-      return { ...base, status: "suggestion", suggesterId: suggester, draft, createdAt, rationale: String(value.rationale ?? "") };
+      return {
+        ...base,
+        status: "suggestion",
+        origin: "suggestion",
+        suggesterId: suggester,
+        draft,
+        createdAt,
+        rationale: String(value.rationale ?? ""),
+      };
     }
     return {
       ...base,
       status: "approved",
+      origin: "suggestion",
       suggesterId: suggester,
       draft,
       createdAt,
@@ -62,6 +82,7 @@ export function parseWorkItem(value: unknown): WorkItem {
     return {
       ...base,
       status: "rejected",
+      origin: "suggestion",
       draft: parseDraft(value.draft),
       rejectedAt: unixSeconds(Number(value.rejectedAt)),
       reason: String(value.reason ?? ""),
@@ -75,6 +96,7 @@ export function parseWorkItem(value: unknown): WorkItem {
     return {
       ...base,
       status: "discarded",
+      origin: value.origin === "manual" ? "manual" : "suggestion",
       discardedAt: unixSeconds(Number(value.discardedAt)),
       reason: String(value.reason ?? ""),
       priorStatus: prior,
@@ -85,11 +107,12 @@ export function parseWorkItem(value: unknown): WorkItem {
   const [first, ...rest] = events;
   if (first === undefined) throw new Error("stored item is missing events");
   const signedEvents = [first, ...rest] as const;
+  const origin = value.origin === "manual" ? "manual" : "suggestion";
   if (value.status === "signed") {
-    return { ...base, status: "signed", events: signedEvents, signedAt: unixSeconds(Number(value.signedAt)) };
+    return { ...base, status: "signed", origin, events: signedEvents, signedAt: unixSeconds(Number(value.signedAt)) };
   }
   if (value.status === "queued") {
-    return { ...base, status: "queued", events: signedEvents, queuedAt: unixSeconds(Number(value.queuedAt)) };
+    return { ...base, status: "queued", origin, events: signedEvents, queuedAt: unixSeconds(Number(value.queuedAt)) };
   }
   if (value.status === "sent") {
     if (!Array.isArray(value.results) || value.results.length === 0) throw new Error("sent item is missing results");
@@ -99,6 +122,7 @@ export function parseWorkItem(value: unknown): WorkItem {
     return {
       ...base,
       status: "sent",
+      origin,
       events: signedEvents,
       publishedAt: unixSeconds(Number(value.publishedAt)),
       results: [result, ...more],
@@ -108,6 +132,7 @@ export function parseWorkItem(value: unknown): WorkItem {
     return {
       ...base,
       status: "failed",
+      origin,
       events: signedEvents,
       failedAt: unixSeconds(Number(value.failedAt)),
       results: Array.isArray(value.results) ? value.results.map(parseResult) : [],
@@ -118,6 +143,7 @@ export function parseWorkItem(value: unknown): WorkItem {
     return {
       ...base,
       status: "missed",
+      origin,
       events: signedEvents,
       missedAt: unixSeconds(Number(value.missedAt)),
       lateBySeconds: Number(value.lateBySeconds),
@@ -190,9 +216,11 @@ export class WorkStore {
     if (args.suggesterId !== args.profile.suggesterId) {
       throw new Error("this profile has a different suggester");
     }
+    this.requireCriteria(args.profile);
     assertNoPrivateKey(args.draft);
     const item: Suggestion = {
       status: "suggestion",
+      origin: "suggestion",
       id: args.id ?? suggestionId(`sug_${randomBytes(8).toString("hex")}`),
       profileId: args.profile.id,
       suggesterId: args.suggesterId,
@@ -204,17 +232,20 @@ export class WorkStore {
     return item;
   }
 
-  composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds; rationale?: string }): WorkItem {
+  composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds }): WorkItem {
     return this.atomic(() => {
-      this.requireCriteria(args.profile);
-      const suggested = this.suggest({
-        profile: args.profile,
-        suggesterId: args.profile.suggesterId,
+      assertNoPrivateKey(args.draft);
+      const item: WorkItem = {
+        status: "approved",
+        origin: "manual",
+        id: suggestionId(`sug_${randomBytes(8).toString("hex")}`),
+        profileId: args.profile.id,
         draft: args.draft,
-        rationale: args.rationale ?? "composed locally",
-        at: args.at,
-      });
-      return this.transition(suggested.id, { type: "approve" }, args.at, args.profile);
+        createdAt: args.at,
+        approvedAt: args.at,
+      };
+      this.insert(item);
+      return item;
     });
   }
 
@@ -236,19 +267,24 @@ export class WorkStore {
     if (command.type === "sign" && command.events.some((event) => containsPrivateKey(event.content))) {
       throw new PrivateKeyInContentError();
     }
-    const feedbackAction = feedbackActionFor(command);
-    if (profile && feedbackAction) this.requireCriteria(profile);
     return this.atomic(() => {
       const current = this.get(id);
+      const feedbackAction = feedbackActionFor(command);
+      const logsFeedback = Boolean(profile && feedbackAction && current.origin !== "manual");
+      if (logsFeedback && profile && feedbackAction) this.requireCriteria(profile);
       const next = applyCommand(current, command, at);
       const before = signedEventsOf(current);
       const after = signedEventsOf(next);
       if (before && after && !eventsMatch(before, after)) {
         throw new Error("signed events are frozen");
       }
-      if (profile && feedbackAction) this.preserve(feedbackPath(profile.criteriaPath, profile.id));
+      if (logsFeedback && profile && feedbackAction) {
+        this.preserve(feedbackPath(this.criteriaFile(profile), profile.id));
+        this.save(next);
+        this.logFeedback(profile, id, feedbackAction, at, command);
+        return next;
+      }
       this.save(next);
-      if (profile && feedbackAction) this.logFeedback(profile, id, feedbackAction, at, command);
       return next;
     });
   }
@@ -299,7 +335,7 @@ export class WorkStore {
   }
 
   private requireCriteria(profile: Profile): void {
-    assertCriteriaReady(this.dataDir, profile.criteriaPath, profile.id);
+    assertCriteriaReady(this.dataDir, this.criteriaFile(profile), profile.id);
   }
 
   private safeName(path: string): string {
@@ -357,8 +393,14 @@ export class WorkStore {
     }
   }
 
+  private criteriaFile(profile: Profile): string {
+    if (!profile.criteriaPath) throw new InputError("criteria_path", "This profile has no criteria for suggestions.");
+    return profile.criteriaPath;
+  }
+
   private logFeedback(profile: Profile, id: SuggestionId, action: FeedbackAction, at: UnixSeconds, command: WorkCommand): void {
-    const criteria = parseCriteria(readFileSync(profile.criteriaPath, "utf8"), profile.id);
+    const criteriaPath = this.criteriaFile(profile);
+    const criteria = parseCriteria(readFileSync(criteriaPath, "utf8"), profile.id);
     const note =
       command.type === "reject" || command.type === "discard"
         ? command.reason
@@ -366,7 +408,7 @@ export class WorkStore {
           ? "missed the catch-up window"
           : "";
     appendFeedback(
-      feedbackPath(profile.criteriaPath, profile.id),
+      feedbackPath(criteriaPath, profile.id),
       feedbackEntry({
         at,
         suggestionId: id,

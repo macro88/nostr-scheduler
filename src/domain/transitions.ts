@@ -18,6 +18,7 @@ import type {
 export function approve(item: Suggestion, at: UnixSeconds): Approved {
   return {
     status: "approved",
+    origin: "suggestion",
     id: item.id,
     profileId: item.profileId,
     suggesterId: item.suggesterId,
@@ -30,6 +31,7 @@ export function approve(item: Suggestion, at: UnixSeconds): Approved {
 export function reject(item: Suggestion, args: { at: UnixSeconds; reason: string }): Rejected {
   return {
     status: "rejected",
+    origin: "suggestion",
     id: item.id,
     profileId: item.profileId,
     draft: item.draft,
@@ -52,6 +54,7 @@ export function markSigned(
 ): SignedWork {
   return {
     status: "signed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: args.events,
@@ -62,6 +65,7 @@ export function markSigned(
 export function enqueue(item: SignedWork, at: UnixSeconds): Queued {
   return {
     status: "queued",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -78,6 +82,7 @@ export function markSent(
   }
   return {
     status: "sent",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -95,6 +100,7 @@ export function markFailed(
   }
   return {
     status: "failed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -110,6 +116,7 @@ export function markMissed(item: Queued, args: { at: UnixSeconds; lateBySeconds:
   }
   return {
     status: "missed",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     events: item.events,
@@ -124,6 +131,7 @@ export function discard(
 ): Discarded {
   return {
     status: "discarded",
+    origin: item.origin,
     id: item.id,
     profileId: item.profileId,
     discardedAt: args.at,

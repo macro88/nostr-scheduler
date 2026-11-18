@@ -83,6 +83,8 @@ export type RelayPolicy = {
   readonly allowPublicRelays: boolean;
 };
 
+export type NoteOrigin = "manual" | "suggestion";
+
 export type Profile = {
   readonly id: ProfileId;
   readonly npub: Npub;
@@ -91,7 +93,7 @@ export type Profile = {
   readonly suggesterId: SuggesterId;
   readonly signer: SignerRef;
   readonly relays: RelayPolicy;
-  readonly criteriaPath: string;
+  readonly criteriaPath: string | null;
 };
 
 export type PostType = "note" | "thread" | "reply";
@@ -171,6 +173,7 @@ export type Draft = NoteDraft | ThreadDraft | ReplyDraft;
 
 export type Suggestion = {
   readonly status: "suggestion";
+  readonly origin: "suggestion";
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly suggesterId: SuggesterId;
@@ -179,18 +182,22 @@ export type Suggestion = {
   readonly rationale: string;
 };
 
-export type Approved = {
+type ApprovedBase = {
   readonly status: "approved";
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
-  readonly suggesterId: SuggesterId;
   readonly draft: Draft;
   readonly createdAt: UnixSeconds;
   readonly approvedAt: UnixSeconds;
 };
 
+export type Approved =
+  | (ApprovedBase & { readonly origin: "suggestion"; readonly suggesterId: SuggesterId })
+  | (ApprovedBase & { readonly origin: "manual" });
+
 export type SignedWork = {
   readonly status: "signed";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly events: NonEmpty<SignedEvent>;
@@ -199,6 +206,7 @@ export type SignedWork = {
 
 export type Queued = {
   readonly status: "queued";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly events: NonEmpty<SignedEvent>;
@@ -213,6 +221,7 @@ export type PerRelayResult = {
 
 export type Sent = {
   readonly status: "sent";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly events: NonEmpty<SignedEvent>;
@@ -222,6 +231,7 @@ export type Sent = {
 
 export type Failed = {
   readonly status: "failed";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly events: NonEmpty<SignedEvent>;
@@ -232,6 +242,7 @@ export type Failed = {
 
 export type Missed = {
   readonly status: "missed";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly events: NonEmpty<SignedEvent>;
@@ -241,6 +252,7 @@ export type Missed = {
 
 export type Rejected = {
   readonly status: "rejected";
+  readonly origin: "suggestion";
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly draft: Draft;
@@ -250,6 +262,7 @@ export type Rejected = {
 
 export type Discarded = {
   readonly status: "discarded";
+  readonly origin: NoteOrigin;
   readonly id: SuggestionId;
   readonly profileId: ProfileId;
   readonly discardedAt: UnixSeconds;

@@ -102,7 +102,7 @@ describe("criteria identity and save integrity", () => {
     close();
   });
 
-  test("scheduling with the example profile_id does not approve the note, and a retry after the fix does", async () => {
+  test("a suggestion with the example profile_id is not stored, and approving one still records feedback", async () => {
     const dir = tempDir();
     const signer = createMockSigner();
     writeCriteria(dir, "demo.md", "example");
@@ -111,7 +111,7 @@ describe("criteria identity and save integrity", () => {
     const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
     const api = await authed(app);
     const draft = { type: "note", content: "A local note about the queue.", proposedFireAt: clock + 3600 };
-    const failed = await api.post("/api/compose", { profileId: "desk", draft });
+    const failed = await api.post("/api/suggestions", { profileId: "desk", rationale: "because", draft, origin: "manual" });
     const failedBody = (await failed.json()) as { error?: string };
     expect(failed.status).toBe(400);
     expect(failedBody.error).toContain("criteria/demo.md");
@@ -123,12 +123,16 @@ describe("criteria identity and save integrity", () => {
     expect(existsSync(feedbackPath(join(dir, "criteria", "demo.md"), "desk"))).toBe(false);
 
     writeCriteria(dir, "demo.md", "desk");
-    const saved = await api.post("/api/compose", { profileId: "desk", draft });
-    const savedBody = (await saved.json()) as { status?: string; error?: string };
-    expect(saved.status).toBe(200);
-    expect(savedBody.status).toBe("approved");
-    const items = (await (await api.get("/api/items?profileId=desk")).json()) as { status: string }[];
-    expect(items.map((item) => item.status)).toEqual(["approved"]);
+    const suggested = await api.post("/api/suggestions", { profileId: "desk", rationale: "because", draft, origin: "manual" });
+    const suggestedBody = (await suggested.json()) as { id?: string; status?: string; origin?: string };
+    expect(suggested.status).toBe(200);
+    expect(suggestedBody.status).toBe("suggestion");
+    expect(suggestedBody.origin).toBe("suggestion");
+    const approved = await api.post(`/api/items/${suggestedBody.id}/approve`, {});
+    const approvedBody = (await approved.json()) as { status?: string; origin?: string };
+    expect(approved.status).toBe(200);
+    expect(approvedBody.status).toBe("approved");
+    expect(approvedBody.origin).toBe("suggestion");
     const feedback = readFeedback(feedbackPath(join(dir, "criteria", "demo.md"), "desk"));
     expect(feedback.map((entry) => entry.action)).toEqual(["approved"]);
     close();

@@ -128,6 +128,7 @@ export async function callTool(ctx: McpContext, name: string, args: Record<strin
   if (name === "list_profiles") return ctx.profiles.map(publicSigner);
   if (name === "get_criteria") {
     const profile = profileById(ctx, String(args.profileId ?? ""));
+    if (!profile.criteriaPath) throw new Error("This profile has no criteria for suggestions.");
     const criteria = parseCriteria(readFileSync(profile.criteriaPath, "utf8"), profile.id);
     const feedback = readFeedback(feedbackPath(profile.criteriaPath, profile.id));
     return { criteria, feedback };
@@ -164,6 +165,7 @@ export async function callTool(ctx: McpContext, name: string, args: Record<strin
     return ctx.store.list(id).map((item) => ({
       id: item.id,
       profileId: item.profileId,
+      origin: item.origin,
       status: item.status,
       fireAt: fireTimesOf(item),
     }));

@@ -67,6 +67,7 @@ function itemView(item: ReturnType<WorkStore["get"]>) {
   return {
     id: item.id,
     profileId: item.profileId,
+    origin: item.origin,
     status: item.status,
     fireAt: fireTimes(item),
     preview: previewOf(item),

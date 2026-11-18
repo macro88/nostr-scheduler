@@ -15,7 +15,8 @@ export type ProfileInput = {
   readonly label: string;
   readonly npub: string;
   readonly signer?: { kind: "nip07" } | { kind: "nip46"; bunkerUri?: string } | { kind: "nip55" };
-  readonly criteriaPath: string;
+  readonly criteriaPath: string | null;
+  readonly replaceCriteria: boolean;
   readonly relays: readonly string[];
   readonly readNip65: boolean;
   readonly allowPublicRelays: boolean;
@@ -57,7 +58,15 @@ export function parseProfileInput(value: unknown, partial: boolean): ProfileInpu
   const label = text(value.label, "label");
   const encoded = text(value.npub, "npub");
   identityOf(encoded);
-  const criteriaPath = text(value.criteriaPath ?? value.criteria_path, "criteria_path");
+  const hasCriteria = "criteriaPath" in value || "criteria_path" in value;
+  let criteriaPath: string | null = null;
+  if (hasCriteria) {
+    const raw = value.criteriaPath ?? value.criteria_path;
+    if (raw !== null && raw !== undefined) {
+      if (typeof raw !== "string") throw new InputError("criteria_path", "expected a string");
+      criteriaPath = raw.trim() === "" ? null : raw.trim();
+    }
+  }
   if (!Array.isArray(value.relays) || value.relays.some((item) => typeof item !== "string")) {
     throw new InputError("relays", "expected a list of URLs");
   }
@@ -86,6 +95,7 @@ export function parseProfileInput(value: unknown, partial: boolean): ProfileInpu
     npub: encoded,
     signer,
     criteriaPath,
+    replaceCriteria: partial ? hasCriteria : true,
     relays,
     readNip65: readRaw === true,
     allowPublicRelays: allowRaw === true,
@@ -124,7 +134,6 @@ function assertUniqueNpub(entries: readonly Record<string, unknown>[], npub: str
 
 function applyOwned(entry: Record<string, unknown>, dataDir: string, input: ProfileInput, id: string, suggester: string | undefined): void {
   const identity = identityOf(input.npub);
-  const criteria = criteriaLocation(dataDir, input.criteriaPath);
   const relays = input.relays.map((url) => classifyPublishRelay(url, input.allowPublicRelays).url);
   entry.id = id;
   entry.label = input.label;
@@ -133,7 +142,10 @@ function applyOwned(entry: Record<string, unknown>, dataDir: string, input: Prof
   if (suggester) entry.suggester_id = suggesterId(suggester);
   const signer = signerRecord(input.signer, entry.signer);
   if (signer) entry.signer = signer;
-  entry.criteria_path = criteria.relativePath;
+  if (input.replaceCriteria) {
+    if (input.criteriaPath === null) delete entry.criteria_path;
+    else entry.criteria_path = criteriaLocation(dataDir, input.criteriaPath).relativePath;
+  }
   entry.relays = relays;
   entry.read_nip65 = input.readNip65;
   entry.allow_public_relays = input.allowPublicRelays;
@@ -145,7 +157,7 @@ export function createProfileRecord(file: string, dataDir: string, value: unknow
   const entries = profileEntries(doc);
   assertUniqueNpub(entries, input.npub);
   const id = nextId(input.label, takenIds(entries));
-  assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
+  if (input.criteriaPath) assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
   const entry: Record<string, unknown> = {};
   applyOwned(entry, dataDir, input, id, `${id}-suggester`);
   entries.push(entry);
@@ -161,7 +173,7 @@ export function updateProfileRecord(file: string, dataDir: string, id: string, v
   const entry = entries.find((item) => item.id === id);
   if (!entry) throw new InputError("id", `no profile ${id}`);
   assertUniqueNpub(entries, input.npub, id);
-  assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
+  if (input.replaceCriteria && input.criteriaPath) assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
   applyOwned(entry, dataDir, input, id, undefined);
   writeProfileDocument(file, doc);
 }
