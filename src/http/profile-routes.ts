@@ -4,7 +4,7 @@ import type { Context, Hono } from "hono";
 import { InputError } from "../domain/brand.ts";
 import { containsPrivateKey, assertValueHasNoPrivateKey } from "../domain/private-key.ts";
 import { classifyPublishRelay, isLoopbackRelay } from "../domain/relays.ts";
-import { criteriaLocation } from "../profiles/criteria.ts";
+import { assessCriteria, criteriaBlock, expectedProfileId } from "../criteria/readiness.ts";
 import { createProfileRecord, deleteProfileRecord, updateProfileRecord } from "../profiles/record.ts";
 import type { Profile, UnixSeconds } from "../domain/types.ts";
 import type { WorkStore } from "../work/store.ts";
@@ -64,8 +64,10 @@ export function mountProfileRoutes(app: Hono, deps: Deps): void {
   app.get("/api/criteria-path", (c) => {
     const path = c.req.query("path") ?? "";
     if (containsPrivateKey(path)) assertValueHasNoPrivateKey(path);
-    const located = criteriaLocation(deps.dataDir, path);
-    return c.json({ path: located.relativePath, exists: located.exists });
+    const check = assessCriteria(deps.dataDir, path, expectedProfileId(c.req.query("profileId")));
+    const detail = criteriaBlock(check) ?? "";
+    if (check.state === "outside") return c.json({ path: "", exists: false, ready: false, detail });
+    return c.json({ path: check.path, exists: check.state !== "missing", ready: check.state === "ready", detail });
   });
 
   app.post("/api/profiles/relay-probe", async (c) => {

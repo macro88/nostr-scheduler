@@ -3,6 +3,7 @@ import { pubkeyFromNpub } from "../domain/bech32.ts";
 import { InputError } from "../domain/brand.ts";
 import { classifyPublishRelay } from "../domain/relays.ts";
 import { assertValueHasNoPrivateKey } from "../domain/private-key.ts";
+import { assertCriteriaReady } from "../criteria/readiness.ts";
 import { criteriaLocation } from "./criteria.ts";
 import { profileEntries, readProfileDocument, writeProfileDocument } from "./file.ts";
 
@@ -144,6 +145,7 @@ export function createProfileRecord(file: string, dataDir: string, value: unknow
   const entries = profileEntries(doc);
   assertUniqueNpub(entries, input.npub);
   const id = nextId(input.label, takenIds(entries));
+  assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
   const entry: Record<string, unknown> = {};
   applyOwned(entry, dataDir, input, id, `${id}-suggester`);
   entries.push(entry);
@@ -159,6 +161,7 @@ export function updateProfileRecord(file: string, dataDir: string, id: string, v
   const entry = entries.find((item) => item.id === id);
   if (!entry) throw new InputError("id", `no profile ${id}`);
   assertUniqueNpub(entries, input.npub, id);
+  assertCriteriaReady(dataDir, input.criteriaPath, profileId(id));
   applyOwned(entry, dataDir, input, id, undefined);
   writeProfileDocument(file, doc);
 }

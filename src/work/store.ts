@@ -1,10 +1,10 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, relative, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomBytes } from "node:crypto";
 import { appendFeedback, feedbackEntry, feedbackPath } from "../criteria/feedback.ts";
 import { parseCriteria } from "../criteria/parse.ts";
-import { readFileSync } from "node:fs";
+import { assertCriteriaReady } from "../criteria/readiness.ts";
 import {
   profileId,
   relayUrl,
@@ -145,9 +145,13 @@ function parseResult(value: unknown): PerRelayResult {
 
 export class WorkStore {
   readonly db: DatabaseSync;
+  private readonly dataDir: string;
+  private readonly snapshots = new Map<string, Buffer | null>();
+  private depth = 0;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
+    this.dataDir = dirname(path);
     this.db = new DatabaseSync(path);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS work_items (
@@ -200,6 +204,20 @@ export class WorkStore {
     return item;
   }
 
+  composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds; rationale?: string }): WorkItem {
+    return this.atomic(() => {
+      this.requireCriteria(args.profile);
+      const suggested = this.suggest({
+        profile: args.profile,
+        suggesterId: args.profile.suggesterId,
+        draft: args.draft,
+        rationale: args.rationale ?? "composed locally",
+        at: args.at,
+      });
+      return this.transition(suggested.id, { type: "approve" }, args.at, args.profile);
+    });
+  }
+
   get(id: SuggestionId): WorkItem {
     const row = this.db.prepare("SELECT body_json FROM work_items WHERE id = ?").get(id) as Row | undefined;
     if (!row) throw new Error(`no item ${id}`);
@@ -218,17 +236,21 @@ export class WorkStore {
     if (command.type === "sign" && command.events.some((event) => containsPrivateKey(event.content))) {
       throw new PrivateKeyInContentError();
     }
-    const current = this.get(id);
-    const next = applyCommand(current, command, at);
-    const before = signedEventsOf(current);
-    const after = signedEventsOf(next);
-    if (before && after && !eventsMatch(before, after)) {
-      throw new Error("signed events are frozen");
-    }
-    this.save(next);
     const feedbackAction = feedbackActionFor(command);
-    if (profile && feedbackAction) this.logFeedback(profile, id, feedbackAction, at, command);
-    return next;
+    if (profile && feedbackAction) this.requireCriteria(profile);
+    return this.atomic(() => {
+      const current = this.get(id);
+      const next = applyCommand(current, command, at);
+      const before = signedEventsOf(current);
+      const after = signedEventsOf(next);
+      if (before && after && !eventsMatch(before, after)) {
+        throw new Error("signed events are frozen");
+      }
+      if (profile && feedbackAction) this.preserve(feedbackPath(profile.criteriaPath, profile.id));
+      this.save(next);
+      if (profile && feedbackAction) this.logFeedback(profile, id, feedbackAction, at, command);
+      return next;
+    });
   }
 
   recordPublish(args: {
@@ -274,6 +296,65 @@ export class WorkStore {
     const row = this.db.prepare("SELECT body_json FROM seen_events WHERE id = ?").get(id) as { body_json: string } | undefined;
     if (!row) return null;
     return parseSignedEvent(JSON.parse(row.body_json));
+  }
+
+  private requireCriteria(profile: Profile): void {
+    assertCriteriaReady(this.dataDir, profile.criteriaPath, profile.id);
+  }
+
+  private safeName(path: string): string {
+    const rel = relative(this.dataDir, path);
+    if (rel.startsWith("..") || rel === "") return "the feedback file";
+    return rel.split(sep).join("/");
+  }
+
+  private preserve(path: string): void {
+    if (this.snapshots.has(path)) return;
+    try {
+      this.snapshots.set(path, readFileSync(path));
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code === "ENOENT") {
+        this.snapshots.set(path, null);
+        return;
+      }
+      throw new Error(`Could not write feedback at ${this.safeName(path)}.`);
+    }
+  }
+
+  private restoreSnapshots(): void {
+    for (const [path, bytes] of this.snapshots) {
+      if (bytes === null) {
+        if (existsSync(path)) unlinkSync(path);
+      } else {
+        writeFileSync(path, bytes);
+      }
+    }
+    this.snapshots.clear();
+  }
+
+  private atomic<T>(run: () => T): T {
+    const outer = this.depth === 0;
+    if (outer) this.db.exec("BEGIN IMMEDIATE");
+    this.depth += 1;
+    try {
+      const value = run();
+      if (outer) this.db.exec("COMMIT");
+      if (outer) this.snapshots.clear();
+      return value;
+    } catch (error) {
+      if (outer) {
+        try {
+          this.db.exec("ROLLBACK");
+        } catch {
+          // The transaction is already closed.
+        }
+        this.restoreSnapshots();
+      }
+      throw error;
+    } finally {
+      this.depth -= 1;
+    }
   }
 
   private logFeedback(profile: Profile, id: SuggestionId, action: FeedbackAction, at: UnixSeconds, command: WorkCommand): void {
