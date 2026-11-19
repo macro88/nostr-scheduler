@@ -151,7 +151,14 @@ export function Sign({ profile }: { profile: Profile }) {
                 <div>
                   <div className="row-status">
                     <span className="status">Awaiting signature</span>
-                    <time>{item.fireAt[0] ? `${formatQueueWhen(item.fireAt[0])} ${localZoneLabel(item.fireAt[0])}` : ""}</time>
+                    <time>
+                      {item.fireAt[0] ? (
+                        <>
+                          <span className="when-unit">{formatQueueWhen(item.fireAt[0])}</span>
+                          <span className="when-unit">{localZoneLabel(item.fireAt[0])}</span>
+                        </>
+                      ) : null}
+                    </time>
                   </div>
                   <p className="note-lg">{item.preview}</p>
                 </div>

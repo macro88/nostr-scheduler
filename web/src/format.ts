@@ -17,15 +17,21 @@ export function formatWhen(value: Date | number): string {
   return `${part(parts, "weekday")} ${part(parts, "day")} ${part(parts, "month")}, ${part(parts, "hour")}:${part(parts, "minute")}`;
 }
 
-export function localZoneLabel(value: Date | number = new Date()): string {
-  const date = typeof value === "number" ? new Date(value < 1e12 ? value * 1000 : value) : value;
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
-  const offset = -date.getTimezoneOffset();
+export function zoneLabel(zone: string, offsetMinutesWest: number): string {
+  const city = zone.split("/").at(-1)?.replaceAll("_", " ") || zone;
+  if (city === "UTC" || zone === "Etc/UTC") return "UTC";
+  const offset = -offsetMinutesWest;
   const sign = offset >= 0 ? "+" : "-";
   const abs = Math.abs(offset);
   const hours = String(Math.floor(abs / 60)).padStart(2, "0");
   const minutes = String(abs % 60).padStart(2, "0");
-  return `${zone} UTC${sign}${hours}:${minutes}`;
+  return `${city} UTC${sign}${hours}:${minutes}`;
+}
+
+export function localZoneLabel(value: Date | number = new Date()): string {
+  const date = typeof value === "number" ? new Date(value < 1e12 ? value * 1000 : value) : value;
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
+  return zoneLabel(zone, date.getTimezoneOffset());
 }
 
 export function sameLocalDay(left: Date, right: Date): boolean {

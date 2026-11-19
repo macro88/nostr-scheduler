@@ -17,7 +17,7 @@ import {
   type SuggestionId,
   type UnixSeconds,
 } from "../domain/brand.ts";
-import { parseDraft } from "../domain/draft.ts";
+import { draftsMatch, parseDraft } from "../domain/draft.ts";
 import { eventsMatch, parseSignedEvent } from "../domain/event.ts";
 import { containsPrivateKey, assertNoPrivateKey, PrivateKeyInContentError } from "../domain/private-key.ts";
 import { applyCommand, type WorkCommand } from "../domain/transitions.ts";
@@ -186,6 +186,13 @@ function parseResult(value: unknown): PerRelayResult {
   };
 }
 
+const storedSchedule = new Set(["approved", "signed", "queued", "sent"]);
+
+function sameManualSchedule(item: WorkItem, profileId: ProfileId, draft: Draft): boolean {
+  if (item.profileId !== profileId || item.origin !== "manual" || !storedSchedule.has(item.status) || !("draft" in item)) return false;
+  return draftsMatch(item.draft, draft);
+}
+
 export class WorkStore {
   readonly db: DatabaseSync;
   private readonly dataDir: string;
@@ -249,20 +256,34 @@ export class WorkStore {
     return item;
   }
 
-  composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds }): WorkItem {
+  composeLocal(args: { profile: Profile; draft: Draft; at: UnixSeconds; id?: SuggestionId }): WorkItem {
     this.assertManualConfigUsable(args.profile);
     return this.atomic(() => {
       assertNoPrivateKey(args.draft);
+      const id = args.id ?? suggestionId(`sug_${randomBytes(8).toString("hex")}`);
+      const existing = this.find(id);
+      if (existing) {
+        if (!sameManualSchedule(existing, args.profile.id, args.draft)) {
+          throw new InputError("id", "That note id is already used.");
+        }
+        return existing;
+      }
       const item: WorkItem = {
         status: "approved",
         origin: "manual",
-        id: suggestionId(`sug_${randomBytes(8).toString("hex")}`),
+        id,
         profileId: args.profile.id,
         draft: args.draft,
         createdAt: args.at,
         approvedAt: args.at,
       };
-      this.insert(item);
+      try {
+        this.insert(item);
+      } catch (error) {
+        const raced = this.find(id);
+        if (raced && sameManualSchedule(raced, args.profile.id, args.draft)) return raced;
+        throw error;
+      }
       return item;
     });
   }
@@ -483,6 +504,12 @@ export class WorkStore {
         criteriaVersion: criteria.version,
       }),
     );
+  }
+
+  private find(id: SuggestionId): WorkItem | undefined {
+    const row = this.db.prepare("SELECT body_json FROM work_items WHERE id = ?").get(id) as Row | undefined;
+    if (!row) return undefined;
+    return parseWorkItem(JSON.parse(row.body_json));
   }
 
   private insert(item: WorkItem): void {

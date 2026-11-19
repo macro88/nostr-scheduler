@@ -36,6 +36,7 @@ export type Item = {
     content?: string;
     proposedFireAt?: number;
     segments?: { content: string; proposedFireAt: number }[];
+    target?: { eventId: string; rootId: string; pubkey: string; relayHint?: string };
     parent?: { at: number; content: string };
   };
   events?: { id: string; content: string; created_at: number; tags: string[][] }[];

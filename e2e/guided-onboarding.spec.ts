@@ -156,7 +156,8 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByText("Profile saved.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Write a note" })).toBeFocused();
   await expect(page.getByTestId("profile")).toHaveText("Desk");
-  await expect(page.getByTestId("writing-rules-note")).toBeVisible();
+  await expect(page.getByTestId("keep-note")).toHaveText("Unsaved text is lost on reload. Save it to keep it in Queue.");
+  await expect(page.getByText("Writing rules for suggestions are not set up.")).toHaveCount(0);
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
   const content = `Blank profile ${Date.now()}`;
   await page.getByTestId("note-text").fill(content);
@@ -170,7 +171,8 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   expect(drafts[0]?.origin).toBe("manual");
   await expect(page.getByTestId("composer-draft")).toHaveCount(0);
   await expect(page.getByTestId("status-draft")).toHaveText("Saved");
-  await expect(page.getByTestId("schedule-zone")).toContainText("UTC");
+  await expect(page.getByTestId("schedule-zone")).toHaveText(/^(UTC|.+ UTC[+-]\d{2}:\d{2})$/);
+  await expect(page.getByTestId("schedule-zone")).not.toHaveText(/UTC UTC/);
   await page.getByTestId("save-draft").click();
   await expect(page.getByText("Scheduled locally for")).toBeVisible();
   const scheduled = (await listItems(page, "desk")).filter((item) => item.preview === content);
@@ -229,7 +231,7 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
     return { button: getComputedStyle(node).backgroundColor, expected };
   });
   expect(repairPaint.button).toBe(repairPaint.expected);
-  await expect(page.getByTestId("writing-rules-note")).toHaveCount(0);
+  await expect(page.getByTestId("keep-note")).toHaveCount(0);
   const sentence = `Keep this sentence ${Date.now()}.`;
   await page.getByTestId("note-text").fill(sentence);
   const when = await page.getByTestId("schedule").innerText();
@@ -246,7 +248,7 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   await expect(page.getByTestId("note-text")).toHaveValue(sentence);
   await expect(page.getByTestId("schedule")).toHaveText(when);
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
-  await expect(page.getByTestId("writing-rules-note")).toBeVisible();
+  await expect(page.getByTestId("keep-note")).toHaveText("Unsaved text is lost on reload. Save it to keep it in Queue.");
   await expect(page.getByTestId("status-approved")).toHaveCount(0);
   expect(await listItems(page, "test")).toEqual([]);
   expect(readFileSync(kept, "utf8")).toBe(custom);

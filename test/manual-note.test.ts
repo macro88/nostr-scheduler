@@ -3,13 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { feedbackPath } from "../src/criteria/feedback.ts";
-import { unixSeconds } from "../src/domain/brand.ts";
+import { relayUrl, unixSeconds } from "../src/domain/brand.ts";
 import { noteUnsigned } from "../src/domain/event.ts";
 import { createApp } from "../src/http/app.ts";
 import { callTool } from "../src/mcp/server.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { loadProfiles } from "../src/profiles/load.ts";
 import { WorkStore } from "../src/work/store.ts";
+import { statusWord } from "../web/src/labels.ts";
 
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 const fixture = "nsec1notarealkeyxxxxxxxx";
@@ -312,6 +313,151 @@ describe("manual notes and suggestions", () => {
     expect(readFileSync(join(dir, "criteria", "kept.md"), "utf8")).toBe(custom);
     const still = await api.post("/api/suggestions", { profileId: "test", rationale: "agent", draft });
     expect(still.status).toBe(400);
+    close();
+  });
+
+  test("the same schedule id is stored once, and a different id keeps an identical note", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    const created = await api.post("/api/profiles", {
+      label: "Desk",
+      npub: signer.npub,
+      signer: { kind: "nip07" },
+      relays: ["ws://127.0.0.1:9"],
+    });
+    expect(created.status).toBe(201);
+    const draft = { type: "note", content: "Same words.", proposedFireAt: clock + 3600 };
+    const first = await api.post("/api/compose", { profileId: "desk", id: "sug_sameintent01", draft });
+    const again = await api.post("/api/compose", { profileId: "desk", id: "sug_sameintent01", draft });
+    const other = await api.post("/api/compose", { profileId: "desk", id: "sug_sameintent02", draft });
+    const clash = await api.post("/api/compose", {
+      profileId: "desk",
+      id: "sug_sameintent01",
+      draft: { type: "note", content: "Different words.", proposedFireAt: clock + 3600 },
+    });
+    expect(first.status).toBe(200);
+    expect(again.status).toBe(200);
+    expect((await again.json()) as { id: string }).toMatchObject({ id: "sug_sameintent01", status: "approved" });
+    expect(other.status).toBe(200);
+    expect(clash.status).toBe(400);
+    const rows = (await (await api.get("/api/items?profileId=desk")).json()) as { id: string; preview: string }[];
+    expect(rows.map((item) => item.id).sort()).toEqual(["sug_sameintent01", "sug_sameintent02"]);
+    expect(rows.every((item) => item.preview === "Same words.")).toBe(true);
+    close();
+  });
+
+  test("awaiting signature is the stored approved row, and queued or sent stay signed states", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    expect((await api.post("/api/profiles", { label: "Desk", npub: signer.npub, signer: { kind: "nip07" }, relays: ["ws://127.0.0.1:9"] })).status).toBe(201);
+    const draft = { type: "note", content: "Unsigned on purpose.", proposedFireAt: clock + 3600 };
+    const created = await api.post("/api/compose", { profileId: "desk", draft });
+    const view = (await created.json()) as { id: string; status: string; events?: unknown };
+    expect(created.status).toBe(200);
+    expect(view.status).toBe("approved");
+    expect(view.events).toBeUndefined();
+    expect(statusWord(view.status)).toBe("Awaiting signature");
+    close();
+
+    const store = new WorkStore(join(dir, "app.sqlite"));
+    const raw = store.db.prepare("SELECT body_json FROM work_items WHERE id = ?").get(view.id) as { body_json: string };
+    const stored = JSON.parse(raw.body_json) as { status: string; events?: unknown; sig?: unknown };
+    expect(stored.status).toBe("approved");
+    expect(stored.events).toBeUndefined();
+    expect(stored.sig).toBeUndefined();
+    expect(raw.body_json).not.toContain("\"sig\"");
+    const approved = store.list().find((item) => item.id === view.id);
+    if (!approved || approved.status !== "approved" || approved.draft.type !== "note") throw new Error("expected an unsigned approved note");
+    expect("events" in approved).toBe(false);
+    const signature = await signer.signEvent(noteUnsigned({ pubkey: signer.pubkey, content: approved.draft.content, createdAt: approved.draft.proposedFireAt }));
+    const signed = store.transition(approved.id, { type: "sign", events: [signature] }, unixSeconds(clock));
+    if (signed.status !== "signed") throw new Error("expected a signature");
+    expect(signed.events).toHaveLength(1);
+    expect(signed.events[0]?.sig).toBe(signature.sig);
+    expect(statusWord(signed.status)).toBe("Signed");
+    const queued = store.transition(signed.id, { type: "enqueue" }, unixSeconds(clock));
+    if (queued.status !== "queued") throw new Error("expected the signed note to be queued");
+    expect(queued.events[0]?.id).toBe(signature.id);
+    expect(statusWord(queued.status)).toBe("Queued");
+    const sent = store.transition(
+      queued.id,
+      { type: "sent", results: [{ relay: relayUrl("ws://127.0.0.1:9"), accepted: true, message: "accepted" }] },
+      unixSeconds(clock),
+    );
+    if (sent.status !== "sent") throw new Error("expected the queued note to be sent");
+    expect(sent.events[0]?.id).toBe(signature.id);
+    expect(statusWord(sent.status)).toBe("Sent");
+    expect(statusWord(sent.status)).not.toBe("Awaiting signature");
+    store.close();
+  });
+
+  test("one schedule id is one row for a note, a thread, and a reply, and a changed payload is refused", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    expect((await api.post("/api/profiles", { label: "Desk", npub: signer.npub, signer: { kind: "nip07" }, relays: ["ws://127.0.0.1:9"] })).status).toBe(201);
+    const note = { type: "note", content: "Same words.", proposedFireAt: clock + 3600 };
+    const thread = {
+      type: "thread",
+      segments: [
+        { content: "Root line", proposedFireAt: clock + 3600 },
+        { content: "Reply line", proposedFireAt: clock + 3601 },
+      ],
+    };
+    const target = { eventId: "a".repeat(64), pubkey: "b".repeat(64), rootId: "c".repeat(64) };
+    const reply = { type: "reply", content: "A reply.", proposedFireAt: clock + 3600, target };
+    const [firstNote, racedNote] = await Promise.all([
+      api.post("/api/compose", { profileId: "desk", id: "sug_noteintent01", draft: note }),
+      api.post("/api/compose", { profileId: "desk", id: "sug_noteintent01", draft: note }),
+    ]);
+    expect(firstNote.status).toBe(200);
+    expect(racedNote.status).toBe(200);
+    expect(((await firstNote.json()) as { id: string }).id).toBe("sug_noteintent01");
+    expect(((await racedNote.json()) as { id: string }).id).toBe("sug_noteintent01");
+    const otherNote = await api.post("/api/compose", { profileId: "desk", id: "sug_noteintent02", draft: note });
+    expect(otherNote.status).toBe(200);
+    const threadOnce = await api.post("/api/compose", { profileId: "desk", id: "sug_threadintent", draft: thread });
+    const threadAgain = await api.post("/api/compose", { profileId: "desk", id: "sug_threadintent", draft: thread });
+    expect(threadOnce.status).toBe(200);
+    expect(threadAgain.status).toBe(200);
+    const replyOnce = await api.post("/api/compose", { profileId: "desk", id: "sug_replyintent1", draft: reply });
+    const replyAgain = await api.post("/api/compose", { profileId: "desk", id: "sug_replyintent1", draft: reply });
+    expect(replyOnce.status).toBe(200);
+    expect(replyAgain.status).toBe(200);
+    const clash = await api.post("/api/compose", {
+      profileId: "desk",
+      id: "sug_noteintent01",
+      draft: { type: "note", content: "Different words.", proposedFireAt: clock + 3600 },
+    });
+    expect(clash.status).toBe(400);
+    const saved = await api.post("/api/drafts", { profileId: "desk", draft: { type: "note", content: "Saved first.", proposedFireAt: clock + 7200 } });
+    const savedBody = (await saved.json()) as { id: string; status: string };
+    expect(saved.status).toBe(200);
+    const edited = await api.post("/api/drafts", {
+      profileId: "desk",
+      id: savedBody.id,
+      draft: { type: "note", content: "Saved first, edited.", proposedFireAt: clock + 7200 },
+    });
+    expect(((await edited.json()) as { id: string }).id).toBe(savedBody.id);
+    const approved = await api.post(`/api/items/${savedBody.id}/approve`, {});
+    const approvedAgain = await api.post(`/api/items/${savedBody.id}/approve`, {});
+    expect(((await approved.json()) as { id: string; status: string }).id).toBe(savedBody.id);
+    expect(approvedAgain.status).toBe(400);
+    const rows = (await (await api.get("/api/items?profileId=desk")).json()) as { id: string; status: string; preview: string }[];
+    expect(rows.filter((item) => item.id === "sug_noteintent01")).toHaveLength(1);
+    expect(rows.filter((item) => item.preview === "Same words.")).toHaveLength(2);
+    expect(rows.filter((item) => item.id === "sug_threadintent")).toHaveLength(1);
+    expect(rows.filter((item) => item.id === "sug_replyintent1")).toHaveLength(1);
+    expect(rows.filter((item) => item.id === savedBody.id && item.status === "approved" && item.preview === "Saved first, edited.")).toHaveLength(1);
+    expect(rows.find((item) => item.id === "sug_noteintent01")?.preview).toBe("Same words.");
     close();
   });
 });
