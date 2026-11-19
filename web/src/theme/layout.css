@@ -1291,6 +1291,18 @@ nav { flex-wrap: wrap; }
   line-height: var(--text-body-sm--line-height);
 }
 .profile-menu button[aria-checked="true"] { background: var(--color-selected); }
+@media (max-width: 480px) {
+  .profile-menu {
+    position: fixed;
+    top: 4.5rem;
+    right: var(--space-8);
+    left: var(--space-8);
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 6rem);
+    overflow: auto;
+  }
+}
 .menu-label { font-size: var(--text-caption); line-height: var(--space-16); color: var(--color-muted); padding: var(--space-8) 10px 2px; }
 .profile-menu .shortcut-toggle { display: flex; align-items: center; gap: var(--space-8); color: var(--color-text); }
 .note-lg { font-family: var(--font-body); font-size: var(--text-display-sm); line-height: var(--text-display-sm--line-height); font-weight: var(--text-display-sm--font-weight); letter-spacing: var(--text-display-sm--letter-spacing); font-optical-sizing: none; font-feature-settings: "lnum" 1, "kern" 1; }

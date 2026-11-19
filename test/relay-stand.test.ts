@@ -77,7 +77,7 @@ describe("standing local relay", () => {
     try {
       const url = `ws://127.0.0.1:${port}`;
       await waitFor(
-        () => stdout.includes(`relay ${url}\n`),
+        () => stdout.includes(`relay ${url}\n`) && stdout.includes(`Add ${url} under Relays on the profile setup page.`),
         () => `relay did not print its url (exit ${child.exitCode})\n${stdout}\n${stderr}`,
       );
       expect(stdout).toContain(`relay ${url}\n`);

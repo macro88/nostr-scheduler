@@ -227,3 +227,62 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await expect(page.getByTestId("status-draft")).toHaveText("Saved");
   await expect(page.getByText("Keep the draft")).toBeVisible();
 });
+
+test("theme choices fit a 320 menu and the week grid scrolls", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await page.getByTestId("profile").click();
+  const choices = page.locator(".profile-menu button, .profile-menu input");
+  const choiceCount = await choices.count();
+  expect(choiceCount).toBeGreaterThanOrEqual(5);
+  for (let index = 0; index < choiceCount; index += 1) {
+    const box = await choices.nth(index).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(700);
+  }
+  for (let step = 0; step < choiceCount; step += 1) {
+    if (await page.getByTestId("theme-system").evaluate((node) => node === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(page.getByTestId("theme-system")).toBeFocused();
+  await page.getByTestId("theme-system").click();
+  await expect(page.getByTestId("theme-system")).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("nav-calendar").click();
+  await expect(page.getByTestId("prev")).toBeVisible();
+  await page.getByTestId("next").focus();
+  await expect(page.getByTestId("next")).toBeFocused();
+  const grid = page.getByTestId("week-grid");
+  await grid.focus();
+  await expect(grid).toBeFocused();
+  const read = () =>
+    grid.evaluate((node) => {
+      const host = node.getBoundingClientRect();
+      const days = [...node.querySelectorAll(".day-head")]
+        .filter((day) => {
+          const box = day.getBoundingClientRect();
+          return box.right > host.left + 48 && box.left < host.right - 8;
+        })
+        .map((day) => (day.textContent ?? "").replace(/\s+/g, " ").trim());
+      return { left: node.scrollLeft, wider: node.scrollWidth > node.clientWidth + 1, days };
+    });
+  const before = await read();
+  expect(before.wider).toBe(true);
+  expect(before.days.length).toBeGreaterThan(0);
+  await page.keyboard.press("ArrowLeft");
+  const afterKey = await read();
+  expect(afterKey.left).toBeLessThan(before.left - 40);
+  expect(afterKey.days.join("|")).not.toBe(before.days.join("|"));
+  const host = await grid.boundingBox();
+  expect(host).not.toBeNull();
+  await page.mouse.move(host!.x + host!.width / 2, host!.y + 80);
+  await page.mouse.wheel(400, 0);
+  await page.waitForTimeout(100);
+  const afterWheel = await read();
+  expect(afterWheel.left).toBeGreaterThan(afterKey.left + 40);
+});
