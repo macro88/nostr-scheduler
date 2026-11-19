@@ -154,7 +154,7 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByText("Public relays stay off unless you allow them.")).toBeVisible();
   await page.getByTestId("save-profile").click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
-  await expect(page.getByTestId("note-text")).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Write a note" })).toBeFocused();
   await expect(page.getByTestId("profile")).toHaveText("Desk");
   await expect(page.getByTestId("writing-rules-note")).toBeVisible();
   await expect(page.getByTestId("repair-note")).toHaveCount(0);

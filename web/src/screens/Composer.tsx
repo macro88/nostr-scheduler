@@ -12,6 +12,55 @@ import { WhenField } from "../WhenField";
 
 type Kind = "note" | "thread" | "reply";
 
+const unknownCopy = "This schedule is not confirmed yet. Check the queue, then try again if the note is not there.";
+
+class ScheduleUnknown extends Error {
+  constructor() {
+    super("unconfirmed");
+    this.name = "ScheduleUnknown";
+  }
+}
+
+type ScheduleAttempt = {
+  profileId: string;
+  draftId: string | null;
+  content: string;
+  fireAt: number;
+  revision: number;
+};
+
+type StoredMatch = { kind: "scheduled" } | { kind: "draft"; id: string } | { kind: "absent" } | { kind: "unread" };
+
+function lostResponse(error: unknown): boolean {
+  if (error instanceof ScheduleUnknown) return true;
+  if (error instanceof TypeError || error instanceof SyntaxError) return true;
+  if (!(error instanceof Error)) return false;
+  return /failed to fetch|network|aborted|abort/i.test(error.message);
+}
+
+function sameNote(item: Item, attempt: ScheduleAttempt): boolean {
+  if (item.profileId !== attempt.profileId) return false;
+  if (item.draft?.type === "note" && typeof item.draft.content === "string" && typeof item.draft.proposedFireAt === "number") {
+    return item.draft.content === attempt.content && item.draft.proposedFireAt === attempt.fireAt;
+  }
+  return item.preview === attempt.content && item.fireAt[0] === attempt.fireAt;
+}
+
+const scheduledStatus = new Set(["approved", "signed", "queued", "sent"]);
+
+async function readMatch(attempt: ScheduleAttempt): Promise<StoredMatch> {
+  try {
+    const items = await api<Item[]>(`/api/items?profileId=${attempt.profileId}`);
+    const matches = items.filter((item) => sameNote(item, attempt));
+    if (matches.some((item) => scheduledStatus.has(item.status))) return { kind: "scheduled" };
+    const draft = matches.find((item) => item.status === "draft");
+    if (draft) return { kind: "draft", id: draft.id };
+    return { kind: "absent" };
+  } catch {
+    return { kind: "unread" };
+  }
+}
+
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
 const rulesCopy = "Writing rules for suggestions are not set up. You can still schedule a note you write. A reload clears this box. A saved note stays in the queue until you schedule it.";
 
@@ -26,8 +75,17 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   const [context, setContext] = useState("");
   const [reply, setReply] = useState("");
   const [formError, setFormError] = useState<unknown>(null);
+  const [unconfirmed, setUnconfirmed] = useState<ScheduleAttempt | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const scheduling = useRef(false);
+  const revision = useRef(0);
+  const noteNow = useRef(note);
+  const whenNow = useRef(when);
+  noteNow.current = note;
+  whenNow.current = when;
+  useEffect(() => {
+    revision.current += 1;
+  }, [profile.id]);
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 801px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 801px)");
@@ -84,23 +142,64 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   const save = useMutation({
     mutationFn: async () => {
       if (scheduling.current || profile.criteriaState === "invalid") throw new Error(repairCopy);
+      const attempt: ScheduleAttempt = {
+        profileId: profile.id,
+        draftId,
+        content: note,
+        fireAt: when,
+        revision: revision.current,
+      };
+      if (unconfirmed && unconfirmed.profileId === attempt.profileId && unconfirmed.content === attempt.content && unconfirmed.fireAt === attempt.fireAt) {
+        const found = await readMatch(unconfirmed);
+        if (found.kind === "scheduled") return { id: unconfirmed.draftId ?? "reconciled", attempt };
+        if (found.kind === "unread") throw new ScheduleUnknown();
+        if (found.kind === "draft") {
+          try {
+            const approved = await api<{ id: string }>(`/api/items/${found.id}/approve`, { method: "POST", body: "{}" });
+            return { ...approved, attempt: { ...attempt, draftId: found.id } };
+          } catch (error) {
+            const again = await readMatch({ ...attempt, draftId: found.id });
+            if (again.kind === "scheduled") return { id: found.id, attempt };
+            if (again.kind === "unread" || lostResponse(error)) {
+              setUnconfirmed({ ...attempt, draftId: found.id });
+              throw new ScheduleUnknown();
+            }
+            throw error;
+          }
+        }
+      }
+      const draft = currentDraft();
       scheduling.current = true;
       try {
-        const draft = currentDraft();
         if (draftId) {
           await api(`/api/drafts`, { method: "POST", body: JSON.stringify({ profileId: profile.id, id: draftId, draft }) });
-          return api<{ id: string }>(`/api/items/${draftId}/approve`, { method: "POST", body: "{}" });
+          const approved = await api<{ id: string }>(`/api/items/${draftId}/approve`, { method: "POST", body: "{}" });
+          return { ...approved, attempt: { ...attempt, draftId } };
         }
-        return api<{ id: string }>("/api/compose", { method: "POST", body: JSON.stringify({ profileId: profile.id, draft }) });
+        const created = await api<{ id: string }>("/api/compose", { method: "POST", body: JSON.stringify({ profileId: profile.id, draft }) });
+        return { ...created, attempt: { ...attempt, draftId: created.id } };
+      } catch (error) {
+        const found = await readMatch(attempt);
+        if (found.kind === "scheduled") return { id: attempt.draftId ?? "reconciled", attempt };
+        if (lostResponse(error) || found.kind === "unread") {
+          setUnconfirmed(found.kind === "draft" ? { ...attempt, draftId: found.id } : attempt);
+          throw new ScheduleUnknown();
+        }
+        throw error;
       } finally {
         scheduling.current = false;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const attempt = result.attempt;
+      setUnconfirmed((current) => (current && current.revision === attempt.revision ? null : current));
+      const same = attempt.revision === revision.current && attempt.profileId === profile.id && attempt.content === noteNow.current && attempt.fireAt === whenNow.current;
+      void queryClient.invalidateQueries({ queryKey: ["items"] });
+      if (!same) return;
       const button = document.querySelector<HTMLElement>("[data-testid='save-draft']");
       if (button) {
         showCheck(button);
-        flyScheduleChip(button, formatWhen(when));
+        flyScheduleChip(button, formatWhen(whenNow.current));
       }
       setFormError(null);
       setDraftId(null);
@@ -109,11 +208,17 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
       setReply("");
       setContext("");
       setRef("");
-      notifySuccess(`Scheduled locally for ${formatWhen(when)}, ${localZoneLabel(when)}.`);
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
+      notifySuccess(`Scheduled locally for ${formatWhen(whenNow.current)}, ${localZoneLabel(whenNow.current)}.`);
       window.setTimeout(() => editor.current?.focus(), 0);
     },
-    onError: (error) => setFormError(error),
+    onError: (error) => {
+      if (error instanceof ScheduleUnknown) {
+        setFormError(null);
+        return;
+      }
+      setUnconfirmed(null);
+      setFormError(error);
+    },
   });
   const keep = useMutation({
     mutationFn: async () => {
@@ -159,7 +264,10 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
             aria-describedby={blocked ? "private-key-alert" : undefined}
             placeholder="Write a short note"
             value={note}
-            onChange={(event) => setNote(event.target.value)}
+            onChange={(event) => {
+              revision.current += 1;
+              setNote(event.target.value);
+            }}
             onKeyDown={(event) => {
               if (blocked) return;
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
@@ -180,7 +288,10 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
                 aria-describedby={blocked ? "private-key-alert" : undefined}
                 placeholder={index === 0 ? "Root post" : "Reply"}
                 value={part}
-                onChange={(event) => setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
+                onChange={(event) => {
+                  revision.current += 1;
+                  setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)));
+                }}
                 onKeyDown={(event) => {
                   if (blocked) return;
                   if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
@@ -220,7 +331,10 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               aria-describedby={blocked ? "private-key-alert" : undefined}
               placeholder="Your reply"
               value={reply}
-              onChange={(event) => setReply(event.target.value)}
+              onChange={(event) => {
+                revision.current += 1;
+                setReply(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (blocked) return;
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
@@ -235,7 +349,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         ) : null}
         <div className="composer-foot">
           <div className="composer-meta">
-            <WhenField value={when} onChange={setWhen} invalid={Boolean(formError)} />
+            <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
             <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
               {text.length} / 280
             </span>
@@ -253,6 +367,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               {rulesCopy}
             </p>
           ) : null}
+          {unconfirmed ? <p className="schedule-unknown" role="status" data-testid="schedule-unknown">{unknownCopy}</p> : null}
           {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
           <div className="composer-actions">
             <Button type="button" variant="ghost" data-testid="save-note" onClick={() => keep.mutate()} disabled={blocked || keep.isPending || save.isPending}>
