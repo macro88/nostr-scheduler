@@ -148,6 +148,8 @@ A second run is safe. It clears the demo directory and produces a new event id.
 
 `pnpm demo:harness` signs one kind-1 note, publishes it to the local relay, and reads it back. It prints `accepted <id>` and `read <id>`.
 
+The browser checks use that same mock signer and the loopback relay. Run `pnpm exec playwright install chromium`, then `pnpm test:e2e`. Compose stays in the page, so an approved note is also in the queue. A sign check reads the sign list. On this HTTP page, a missing browser signer reports that an HTTPS-only extension will not appear.
+
 ## Local relay
 
 `pnpm relay:local` starts that same in-memory relay and leaves it running until Ctrl-C. It listens only on `127.0.0.1:7777`. It is a loopback test relay, and it never forwards an event to a real relay.
