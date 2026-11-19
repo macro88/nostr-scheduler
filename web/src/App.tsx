@@ -29,6 +29,7 @@ export function App() {
   const profileButton = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const firstView = useRef(true);
+  const focusNote = useRef(false);
   const [returnFocus, setReturnFocus] = useState(0);
   const selected = profiles.data?.find((profile) => profile.id === profileId) ?? profiles.data?.[0];
   const sections: Record<View, string> = {
@@ -55,11 +56,14 @@ export function App() {
     if (returnFocus === 0) return;
     const outer = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        const editor = focusNote.current ? document.querySelector<HTMLElement>("[data-testid='note-text']") : null;
+        focusNote.current = false;
         const title = document.getElementById("section-title");
-        if (!title) return;
+        const target = editor ?? title;
+        if (!target) return;
         const options: FocusOptions = {};
         Object.assign(options, { focusVisible: true });
-        title.focus(options);
+        target.focus(options);
       });
     });
     return () => window.cancelAnimationFrame(outer);
@@ -244,6 +248,7 @@ export function App() {
             profile={selected}
             onExit={() => setRepair(false)}
             onSaved={() => {
+              focusNote.current = true;
               setRepair(false);
               setView("compose");
               setReturnFocus((count) => count + 1);

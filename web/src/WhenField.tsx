@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@macro88/ui";
-import { formatWhen } from "./format";
+import { formatWhen, localZoneLabel } from "./format";
 
 type Parts = { day: string; month: string; year: string; hour: string; minute: string };
 
@@ -139,6 +139,7 @@ export function WhenField({
         </svg>
         {formatWhen(value)}
       </button>
+      <span className="schedule-zone" data-testid="schedule-zone">{localZoneLabel(value)}</span>
       {open
         ? createPortal(
             <div
@@ -155,6 +156,7 @@ export function WhenField({
               {field("year", "Year", "time-year")}
               {field("hour", "Hour", "time-hour")}
               {field("minute", "Minute", "time-minute")}
+              <p className="schedule-zone" data-testid="picker-zone">{localZoneLabel(value)}</p>
               <Button type="button" variant="primary" className="time-apply" data-testid="time-apply" onClick={apply}>
                 Use this time
               </Button>

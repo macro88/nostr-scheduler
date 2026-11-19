@@ -80,6 +80,33 @@ export function parseDraft(value: unknown): Draft {
   throw new InputError("type", "expected note, thread, or reply");
 }
 
+export function draftsMatch(left: Draft, right: Draft): boolean {
+  if (left.type === "note" && right.type === "note") {
+    return left.content === right.content && left.proposedFireAt === right.proposedFireAt;
+  }
+  if (left.type === "thread" && right.type === "thread") {
+    return (
+      left.segments.length === right.segments.length &&
+      left.segments.every((segment, index) => segment.content === right.segments[index]?.content && segment.proposedFireAt === right.segments[index]?.proposedFireAt)
+    );
+  }
+  if (left.type === "reply" && right.type === "reply") {
+    const sameParent =
+      (left.parent === undefined && right.parent === undefined) ||
+      (left.parent !== undefined && right.parent !== undefined && left.parent.at === right.parent.at && left.parent.content === right.parent.content);
+    return (
+      left.content === right.content &&
+      left.proposedFireAt === right.proposedFireAt &&
+      left.target.eventId === right.target.eventId &&
+      left.target.rootId === right.target.rootId &&
+      left.target.pubkey === right.target.pubkey &&
+      (left.target.relayHint ?? "") === (right.target.relayHint ?? "") &&
+      sameParent
+    );
+  }
+  return false;
+}
+
 export function fireTimes(draft: Draft): UnixSeconds[] {
   if (draft.type === "thread") return draft.segments.map((segment) => segment.proposedFireAt);
   return [draft.proposedFireAt];

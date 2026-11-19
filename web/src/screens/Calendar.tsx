@@ -210,7 +210,22 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
         </div>
       ) : null}
       {surface.ready && mode === "week" ? (
-        <div className="week-scroll" ref={boardRef} data-testid="week-grid">
+        <div
+          className="week-scroll"
+          ref={boardRef}
+          data-testid="week-grid"
+          tabIndex={0}
+          aria-label="Week"
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            const day = boardRef.current?.querySelector<HTMLElement>(".day-head");
+            if (!boardRef.current || !day) return;
+            event.preventDefault();
+            const step = day.getBoundingClientRect().width;
+            boardRef.current.scrollBy({ left: event.key === "ArrowRight" ? step : -step });
+          }}
+        >
           <div className="week-board" style={{ "--hours": String(span) } as CSSProperties}>
             <div className="gutter-head" />
             <div className="day-heads">

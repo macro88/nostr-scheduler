@@ -55,6 +55,7 @@ export const manualDraftSchema = z.object({
 export const composeSchema = z.object({
   profileId: z.string().min(1),
   draft: draftSchema,
+  id: z.string().min(1).optional(),
 });
 
 export const suggestionSchema = z.object({

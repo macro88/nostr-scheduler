@@ -8,7 +8,7 @@ export function statusWord(status: string): string {
   const words: Record<string, string> = {
     suggestion: "Draft",
     draft: "Saved",
-    approved: "Approved",
+    approved: "Awaiting signature",
     signed: "Signed",
     queued: "Queued",
     sent: "Sent",

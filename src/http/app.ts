@@ -176,6 +176,7 @@ export function createApp(options: AppOptions) {
       profile: owner,
       draft: parseDraft(body.draft),
       at: now(),
+      ...(body.id ? { id: suggestionId(body.id) } : {}),
     });
     notify();
     return c.json(itemView(approved));

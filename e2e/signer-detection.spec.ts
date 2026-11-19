@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
@@ -6,7 +7,20 @@ import { LocalRelay } from "../src/test-relay/relay.ts";
 const dataDir = "e2e/run";
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
+function clearQueue() {
+  const sqlite = `${dataDir}/app.sqlite`;
+  if (!existsSync(sqlite)) return;
+  const db = new DatabaseSync(sqlite);
+  db.exec("DELETE FROM work_items");
+  db.close();
+}
+
+function onSignList(page: Page, text: string) {
+  return page.getByTestId("sign").getByRole("article").filter({ hasText: text });
+}
+
 function profileFile(signer: { npub: string; pubkey: string }, relay: string) {
+  clearQueue();
   mkdirSync(`${dataDir}/criteria`, { recursive: true });
   writeFileSync(`${dataDir}/criteria/demo.md`, example.replace("profile_id: example", "profile_id: demo"));
   writeFileSync(
@@ -66,7 +80,7 @@ test("a browser signer that appears after the click can sign", async ({ page }) 
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Delayed signer note")).toBeVisible();
+  await expect(onSignList(page, "Delayed signer note")).toBeVisible();
   await page.getByTestId("sign-browser").click();
   await page.waitForTimeout(200);
   await page.evaluate(() => {
@@ -114,7 +128,7 @@ test("one click opens one prompt when the button is clicked twice", async ({ pag
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("One prompt note")).toBeVisible();
+  await expect(onSignList(page, "One prompt note")).toBeVisible();
   await page.evaluate(() => {
     const target = window as Window & {
       nostr?: { signEvent: (event: unknown) => Promise<unknown> };
@@ -152,10 +166,10 @@ test("a missing signer is reported only after the click has waited", async ({ pa
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Missing signer note")).toBeVisible();
+  await expect(onSignList(page, "Missing signer note")).toBeVisible();
   const started = Date.now();
   await page.getByTestId("sign-browser").click();
-  await expect(page.getByTestId("sign-status")).toContainText("No browser signer is available");
+  await expect(page.getByTestId("sign-status")).toContainText("A browser extension that only runs on HTTPS will not appear here.");
   expect(Date.now() - started).toBeGreaterThanOrEqual(900);
   const note = (await items(page)).find((item) => item.preview.includes("Missing signer note"));
   expect(note?.status).toBe("approved");
@@ -178,7 +192,7 @@ test("an object without signEvent is not treated as a missing extension", async 
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Incompatible signer note")).toBeVisible();
+  await expect(onSignList(page, "Incompatible signer note")).toBeVisible();
   await page.getByTestId("sign-browser").click();
   await expect(page.getByTestId("sign-status")).toContainText("cannot sign notes");
   const note = (await items(page)).find((item) => item.preview.includes("Incompatible signer note"));
@@ -204,7 +218,7 @@ test("a refused signature is not described as a missing extension", async ({ pag
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Refused signer note")).toBeVisible();
+  await expect(onSignList(page, "Refused signer note")).toBeVisible();
   await page.getByTestId("sign-browser").click();
   await expect(page.getByTestId("sign-status")).toContainText("did not allow this note");
   await expect(page.getByTestId("sign-status")).not.toContainText("install a signer");
@@ -227,7 +241,7 @@ test("leaving Sign drops a signature that arrives later", async ({ page }) => {
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Left before sign")).toBeVisible();
+  await expect(onSignList(page, "Left before sign")).toBeVisible();
   await page.evaluate(() => {
     const target = window as Window & {
       nostr?: { signEvent: (event: unknown) => Promise<unknown> };
@@ -276,7 +290,7 @@ test("a signature from another pubkey is not submitted", async ({ page }) => {
   });
   await page.reload();
   await page.getByTestId("nav-sign").click();
-  await expect(page.getByText("Other identity note")).toBeVisible();
+  await expect(onSignList(page, "Other identity note")).toBeVisible();
   await page.getByTestId("sign-browser").click();
   await expect(page.getByTestId("sign-status")).toContainText("different identity");
   const note = (await items(page)).find((item) => item.preview.includes("Other identity note"));

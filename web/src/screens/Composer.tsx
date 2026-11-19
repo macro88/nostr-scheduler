@@ -2,18 +2,109 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
-import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
+import { formatQueueWhen, formatWhen, localZoneLabel, startOfWeek } from "../format";
 import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
 import { notifySuccess } from "../toasts";
-import { flyScheduleChip, showCheck } from "../theme/motion";
+import { flyScheduleChip } from "../theme/motion";
 import { WhenField } from "../WhenField";
 
 type Kind = "note" | "thread" | "reply";
 
+const unknownCopy = "This schedule is not confirmed yet. Check the queue, then try again if the note is not there.";
+const pendingCopy = "Scheduling this note.";
+
+class ScheduleUnknown extends Error {
+  constructor() {
+    super("unconfirmed");
+    this.name = "ScheduleUnknown";
+  }
+}
+
+class ScheduleBusy extends Error {
+  constructor() {
+    super("busy");
+    this.name = "ScheduleBusy";
+  }
+}
+
+type Snapshot =
+  | { type: "note"; content: string; proposedFireAt: number }
+  | { type: "thread"; segments: { content: string; proposedFireAt: number }[] }
+  | { type: "reply"; content: string; proposedFireAt: number; target: { eventId: string; rootId: string; pubkey: string; relayHint?: string }; parent?: { at: number; content: string } };
+
+type ScheduleAttempt = {
+  profileId: string;
+  intentId: string;
+  draftId: string | null;
+  draft: Snapshot;
+  revision: number;
+};
+
+function sameSnapshot(left: Snapshot, right: Snapshot): boolean {
+  if (left.type === "note" && right.type === "note") return left.content === right.content && left.proposedFireAt === right.proposedFireAt;
+  if (left.type === "thread" && right.type === "thread") {
+    return left.segments.length === right.segments.length && left.segments.every((segment, index) => segment.content === right.segments[index]?.content && segment.proposedFireAt === right.segments[index]?.proposedFireAt);
+  }
+  if (left.type === "reply" && right.type === "reply") {
+    const sameParent = (left.parent === undefined && right.parent === undefined) || (left.parent !== undefined && right.parent !== undefined && left.parent.at === right.parent.at && left.parent.content === right.parent.content);
+    return left.content === right.content && left.proposedFireAt === right.proposedFireAt && left.target.eventId === right.target.eventId && left.target.rootId === right.target.rootId && left.target.pubkey === right.target.pubkey && (left.target.relayHint ?? "") === (right.target.relayHint ?? "") && sameParent;
+  }
+  return false;
+}
+
+type StoredMatch = "scheduled" | "absent" | "unread" | "open" | "held";
+
+function lostResponse(error: unknown): boolean {
+  if (error instanceof ScheduleUnknown) return true;
+  if (error instanceof TypeError || error instanceof SyntaxError) return true;
+  if (!(error instanceof Error)) return false;
+  return /failed to fetch|network|aborted|abort/i.test(error.message);
+}
+
+function intentId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return `sug_${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function sameIntent(item: Item, attempt: ScheduleAttempt): boolean {
+  if (item.id !== attempt.intentId || item.profileId !== attempt.profileId || !item.draft) return false;
+  const draft = item.draft;
+  if (draft.type === "note" && typeof draft.content === "string" && typeof draft.proposedFireAt === "number") {
+    return sameSnapshot({ type: "note", content: draft.content, proposedFireAt: draft.proposedFireAt }, attempt.draft);
+  }
+  if (draft.type === "thread" && draft.segments) {
+    return sameSnapshot({ type: "thread", segments: draft.segments }, attempt.draft);
+  }
+  if (draft.type === "reply" && typeof draft.content === "string" && typeof draft.proposedFireAt === "number" && draft.target) {
+    return sameSnapshot({ type: "reply", content: draft.content, proposedFireAt: draft.proposedFireAt, target: draft.target, ...(draft.parent ? { parent: draft.parent } : {}) }, attempt.draft);
+  }
+  return false;
+}
+
+const scheduledStatus = new Set(["approved", "signed", "queued", "sent"]);
+
+async function readIntent(attempt: ScheduleAttempt): Promise<StoredMatch> {
+  try {
+    const items = await api<Item[]>(`/api/items?profileId=${attempt.profileId}`);
+    const item = items.find((entry) => entry.id === attempt.intentId);
+    if (!item) return "absent";
+    if (!sameIntent(item, attempt)) return "held";
+    if (scheduledStatus.has(item.status)) return "scheduled";
+    if (item.status === "draft") return "open";
+    return "held";
+  } catch {
+    return "unread";
+  }
+}
+
+function idAlreadyUsed(error: unknown): boolean {
+  return error instanceof Error && /already used/i.test(error.message);
+}
+
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
-const rulesCopy = "Writing rules for suggestions are not set up. You can still schedule a note you write. A reload clears this box. A saved note stays in the queue until you schedule it.";
+const keepCopy = "Unsaved text is lost on reload. Save it to keep it in Queue.";
 
 export function Composer({ profile, onRepair, headingId }: { profile: Profile; onRepair?: () => void; headingId?: string }) {
   const queryClient = useQueryClient();
@@ -26,8 +117,17 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   const [context, setContext] = useState("");
   const [reply, setReply] = useState("");
   const [formError, setFormError] = useState<unknown>(null);
+  const [unconfirmed, setUnconfirmed] = useState<ScheduleAttempt | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const scheduling = useRef(false);
+  const revision = useRef(0);
+  const noteNow = useRef(note);
+  const whenNow = useRef(when);
+  noteNow.current = note;
+  whenNow.current = when;
+  useEffect(() => {
+    revision.current += 1;
+  }, [profile.id]);
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 801px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 801px)");
@@ -51,56 +151,92 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   useLayoutEffect(() => {
     const node = editor.current;
     if (!node) return;
-    if (!window.matchMedia("(max-width: 800px)").matches) {
-      node.style.height = "";
-      return;
-    }
-    node.style.height = "auto";
-    node.style.height = `${Math.max(node.scrollHeight, 120)}px`;
-    node.scrollTop = 0;
+    node.style.height = "";
   }, [note, reply, parts, kind]);
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
   const texts = kind === "note" ? [note] : kind === "reply" ? [reply] : parts;
   const blocked = texts.some((value) => containsPrivateKey(value));
   const draftText = text.trim();
-  const queueRows = draftText && !blocked
+  const matchesSaved = upcoming.some((item) => item.status === "draft" && item.preview === draftText && item.fireAt[0] === when);
+  const queueRows = draftText && !blocked && !matchesSaved
     ? [...upcoming, { id: "composer-draft", fireAt: [when], preview: draftText, status: "suggestion" }].sort(
         (left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0),
       )
     : upcoming;
 
-  function currentDraft() {
+  function currentDraft(): Snapshot {
     const fireAt = when;
     if (!Number.isFinite(fireAt) || fireAt <= Math.floor(Date.now() / 1000)) throw new Error("created_at in the past");
     if (fireAt > Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60) throw new Error("further ahead than the sign-ahead horizon");
     if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
     if (kind === "note") return { type: "note", content: note, proposedFireAt: fireAt };
     if (kind === "thread") return { type: "thread", segments: parts.map((content, index) => ({ content, proposedFireAt: fireAt + index })) };
-    return { type: "reply", content: reply, proposedFireAt: fireAt, target: JSON.parse(contextTarget(context, ref)) };
+    const target = JSON.parse(contextTarget(context, ref)) as { eventId: string; rootId: string; pubkey: string; relayHint?: string };
+    return { type: "reply", content: reply, proposedFireAt: fireAt, target };
   }
 
   const save = useMutation({
     mutationFn: async () => {
-      if (scheduling.current || profile.criteriaState === "invalid") throw new Error(repairCopy);
+      if (scheduling.current) throw new ScheduleBusy();
       scheduling.current = true;
+      let attempt: ScheduleAttempt | null = null;
       try {
+        if (profile.criteriaState === "invalid") throw new Error(repairCopy);
         const draft = currentDraft();
-        if (draftId) {
-          await api(`/api/drafts`, { method: "POST", body: JSON.stringify({ profileId: profile.id, id: draftId, draft }) });
-          return api<{ id: string }>(`/api/items/${draftId}/approve`, { method: "POST", body: "{}" });
+        const reusable = unconfirmed && unconfirmed.profileId === profile.id && sameSnapshot(unconfirmed.draft, draft) ? unconfirmed : null;
+        attempt = {
+          profileId: profile.id,
+          intentId: reusable?.intentId ?? draftId ?? intentId(),
+          draftId: reusable?.draftId ?? draftId,
+          draft,
+          revision: revision.current,
+        };
+        if (reusable) {
+          const found = await readIntent(attempt);
+          if (found === "scheduled") return { id: attempt.intentId, attempt };
+          if (found === "unread" || found === "held") {
+            setUnconfirmed(attempt);
+            throw new ScheduleUnknown();
+          }
         }
-        return api<{ id: string }>("/api/compose", { method: "POST", body: JSON.stringify({ profileId: profile.id, draft }) });
+        if (attempt.draftId) {
+          await api(`/api/drafts`, { method: "POST", body: JSON.stringify({ profileId: profile.id, id: attempt.draftId, draft }) });
+          const approved = await api<{ id: string }>(`/api/items/${attempt.draftId}/approve`, { method: "POST", body: "{}" });
+          return { ...approved, attempt };
+        }
+        const created = await api<{ id: string }>("/api/compose", {
+          method: "POST",
+          body: JSON.stringify({ profileId: profile.id, id: attempt.intentId, draft }),
+        });
+        return { ...created, attempt: { ...attempt, intentId: created.id || attempt.intentId } };
+      } catch (error) {
+        if (error instanceof ScheduleUnknown || error instanceof ScheduleBusy || !attempt) throw error;
+        const found = await readIntent(attempt);
+        if (found === "scheduled") return { id: attempt.intentId, attempt };
+        if (found === "held" || idAlreadyUsed(error) || lostResponse(error) || found === "unread" || found === "open") {
+          setUnconfirmed(attempt);
+          throw new ScheduleUnknown();
+        }
+        throw error;
       } finally {
         scheduling.current = false;
       }
     },
-    onSuccess: () => {
-      const button = document.querySelector<HTMLElement>("[data-testid='save-draft']");
-      if (button) {
-        showCheck(button);
-        flyScheduleChip(button, formatWhen(when));
+    onSuccess: (result) => {
+      const attempt = result.attempt;
+      setUnconfirmed((current) => (current && current.intentId === attempt.intentId ? null : current));
+      let live: Snapshot | null = null;
+      try {
+        live = currentDraft();
+      } catch {
+        live = null;
       }
+      const same = attempt.revision === revision.current && attempt.profileId === profile.id && live !== null && sameSnapshot(attempt.draft, live);
+      void queryClient.invalidateQueries({ queryKey: ["items"] });
+      if (!same) return;
+      const button = document.querySelector<HTMLElement>("[data-testid='save-draft']");
+      if (button) flyScheduleChip(button, formatWhen(whenNow.current));
       setFormError(null);
       setDraftId(null);
       setNote("");
@@ -108,11 +244,18 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
       setReply("");
       setContext("");
       setRef("");
-      notifySuccess(`Scheduled for ${formatWhen(when)}.`);
-      void queryClient.invalidateQueries({ queryKey: ["items"] });
+      notifySuccess(`Scheduled locally for ${formatWhen(whenNow.current)}, ${localZoneLabel(whenNow.current)}.`);
       window.setTimeout(() => editor.current?.focus(), 0);
     },
-    onError: (error) => setFormError(error),
+    onError: (error) => {
+      if (error instanceof ScheduleBusy) return;
+      if (error instanceof ScheduleUnknown) {
+        setFormError(null);
+        return;
+      }
+      setUnconfirmed(null);
+      setFormError(error);
+    },
   });
   const keep = useMutation({
     mutationFn: async () => {
@@ -131,6 +274,17 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
     onError: (error) => setFormError(error),
   });
 
+  function shownDraft(): Snapshot | null {
+    try {
+      return currentDraft();
+    } catch {
+      return null;
+    }
+  }
+
+  const liveDraft = shownDraft();
+  const outcomeShowing = save.isPending || Boolean(formError) || Boolean(unconfirmed && liveDraft && unconfirmed.profileId === profile.id && sameSnapshot(unconfirmed.draft, liveDraft));
+
   return (
     <div className="split">
       <section className="write-pane">
@@ -146,21 +300,28 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           ))}
         </div>
         {kind === "note" ? (
-          <textarea
-            ref={editor}
+          <>
+            <label className="editor-label" htmlFor="compose-note">Your note</label>
+            <textarea
+              id="compose-note"
+              ref={editor}
             className="editor note-lg literata-reading"
             data-testid="note-text"
-            aria-label="Note"
+            aria-label="Your note"
             aria-invalid={blocked || undefined}
             aria-describedby={blocked ? "private-key-alert" : undefined}
-            placeholder="Write a short note"
+            placeholder="Write here"
             value={note}
-            onChange={(event) => setNote(event.target.value)}
+            onChange={(event) => {
+              revision.current += 1;
+              setNote(event.target.value);
+            }}
             onKeyDown={(event) => {
               if (blocked) return;
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
             }}
           />
+          </>
         ) : null}
         {kind === "thread" ? (
           <div data-testid="thread-editor">
@@ -175,7 +336,10 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
                 aria-describedby={blocked ? "private-key-alert" : undefined}
                 placeholder={index === 0 ? "Root post" : "Reply"}
                 value={part}
-                onChange={(event) => setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
+                onChange={(event) => {
+                  revision.current += 1;
+                  setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)));
+                }}
                 onKeyDown={(event) => {
                   if (blocked) return;
                   if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
@@ -215,7 +379,10 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               aria-describedby={blocked ? "private-key-alert" : undefined}
               placeholder="Your reply"
               value={reply}
-              onChange={(event) => setReply(event.target.value)}
+              onChange={(event) => {
+                revision.current += 1;
+                setReply(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (blocked) return;
                 if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
@@ -230,7 +397,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         ) : null}
         <div className="composer-foot">
           <div className="composer-meta">
-            <WhenField value={when} onChange={setWhen} invalid={Boolean(formError)} />
+            <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
             <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
               {text.length} / 280
             </span>
@@ -238,15 +405,19 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           {profile.criteriaState === "invalid" ? (
             <div className="error" role="alert" data-testid="repair-note">
               <p>{repairCopy}</p>
-              <Button type="button" variant="outline" data-testid="repair-profile" onClick={() => onRepair?.()}>
+              <Button type="button" variant="primary" data-testid="repair-profile" onClick={() => onRepair?.()}>
                 Repair profile
               </Button>
             </div>
           ) : null}
-          {profile.criteriaState === "absent" ? (
-            <p className="field-note" data-testid="writing-rules-note">
-              {rulesCopy}
+          {profile.criteriaState === "absent" && !outcomeShowing ? (
+            <p className="field-note" data-testid="keep-note">
+              {keepCopy}
             </p>
+          ) : null}
+          {save.isPending ? <p className="schedule-pending" role="status" data-testid="schedule-pending">{pendingCopy}</p> : null}
+          {unconfirmed && liveDraft && unconfirmed.profileId === profile.id && sameSnapshot(unconfirmed.draft, liveDraft) && !save.isPending ? (
+            <p className="schedule-unknown" role="status" data-testid="schedule-unknown">{unknownCopy}</p>
           ) : null}
           {formError ? <InlineError error={formError} fallback="The note could not be saved. Try again." /> : null}
           <div className="composer-actions">
@@ -274,7 +445,14 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         <div className="queue-list">
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
-              <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
+              <time>
+                {item.fireAt[0] ? (
+                  <>
+                    <span className="when-unit">{formatQueueWhen(item.fireAt[0])}</span>
+                    <span className="when-unit">{localZoneLabel(item.fireAt[0])}</span>
+                  </>
+                ) : null}
+              </time>
               <p className="q-preview note-md">{item.preview}</p>
               <StatusMark status={item.status} />
             </article>
