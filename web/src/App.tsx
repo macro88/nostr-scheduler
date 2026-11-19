@@ -55,11 +55,13 @@ export function App() {
     if (returnFocus === 0) return;
     const outer = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
+        const editor = document.querySelector<HTMLElement>("[data-testid='note-text']");
         const title = document.getElementById("section-title");
-        if (!title) return;
+        const target = editor ?? title;
+        if (!target) return;
         const options: FocusOptions = {};
         Object.assign(options, { focusVisible: true });
-        title.focus(options);
+        target.focus(options);
       });
     });
     return () => window.cancelAnimationFrame(outer);

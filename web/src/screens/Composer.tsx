@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
-import { formatQueueWhen, formatWhen, startOfWeek } from "../format";
+import { formatQueueWhen, formatWhen, localZoneLabel, startOfWeek } from "../format";
 import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
@@ -64,7 +64,8 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   const texts = kind === "note" ? [note] : kind === "reply" ? [reply] : parts;
   const blocked = texts.some((value) => containsPrivateKey(value));
   const draftText = text.trim();
-  const queueRows = draftText && !blocked
+  const matchesSaved = upcoming.some((item) => item.status === "draft" && item.preview === draftText && item.fireAt[0] === when);
+  const queueRows = draftText && !blocked && !matchesSaved
     ? [...upcoming, { id: "composer-draft", fireAt: [when], preview: draftText, status: "suggestion" }].sort(
         (left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0),
       )
@@ -108,7 +109,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
       setReply("");
       setContext("");
       setRef("");
-      notifySuccess(`Scheduled for ${formatWhen(when)}.`);
+      notifySuccess(`Scheduled locally for ${formatWhen(when)}, ${localZoneLabel(when)}.`);
       void queryClient.invalidateQueries({ queryKey: ["items"] });
       window.setTimeout(() => editor.current?.focus(), 0);
     },
@@ -146,8 +147,11 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           ))}
         </div>
         {kind === "note" ? (
-          <textarea
-            ref={editor}
+          <>
+            <label className="editor-label" htmlFor="compose-note">Note</label>
+            <textarea
+              id="compose-note"
+              ref={editor}
             className="editor note-lg literata-reading"
             data-testid="note-text"
             aria-label="Note"
@@ -161,6 +165,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
             }}
           />
+          </>
         ) : null}
         {kind === "thread" ? (
           <div data-testid="thread-editor">
@@ -238,7 +243,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           {profile.criteriaState === "invalid" ? (
             <div className="error" role="alert" data-testid="repair-note">
               <p>{repairCopy}</p>
-              <Button type="button" variant="outline" data-testid="repair-profile" onClick={() => onRepair?.()}>
+              <Button type="button" variant="primary" data-testid="repair-profile" onClick={() => onRepair?.()}>
                 Repair profile
               </Button>
             </div>
@@ -274,7 +279,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         <div className="queue-list">
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
-              <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
+              <time>{item.fireAt[0] ? `${formatQueueWhen(item.fireAt[0])} ${localZoneLabel(item.fireAt[0])}` : ""}</time>
               <p className="q-preview note-md">{item.preview}</p>
               <StatusMark status={item.status} />
             </article>

@@ -449,7 +449,7 @@ button.check { padding: 0; }
   background: transparent;
   color: var(--color-text);
   padding: 0 0 var(--space-16);
-  border: var(--border-width) solid transparent;
+  border: var(--border-width) solid var(--color-border);
   border-radius: 0;
   caret-color: var(--color-accent);
   box-shadow: none;
@@ -1425,6 +1425,26 @@ textarea.editor:focus-visible,
 select:focus-visible {
   outline: var(--focus-width) solid var(--color-focus);
   outline-offset: var(--focus-offset);
+}
+.editor-label {
+  display: block;
+  margin-bottom: var(--space-8);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-body-sm);
+  line-height: var(--text-body-sm--line-height);
+}
+.schedule-zone {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+}
+@media (max-width: 480px) {
+  .composer-foot { display: flex; flex-direction: column; }
+  .composer-foot .composer-meta { order: 1; }
+  .composer-foot .composer-actions { order: 2; }
+  .composer-foot .field-note { order: 3; }
 }
 
 .inbox-item.leaving {

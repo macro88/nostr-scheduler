@@ -154,7 +154,7 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   await expect(page.getByText("Public relays stay off unless you allow them.")).toBeVisible();
   await page.getByTestId("save-profile").click();
   await expect(page.getByText("Profile saved.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Write a note" })).toBeFocused();
+  await expect(page.getByTestId("note-text")).toBeFocused();
   await expect(page.getByTestId("profile")).toHaveText("Desk");
   await expect(page.getByTestId("writing-rules-note")).toBeVisible();
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
@@ -168,10 +168,14 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   const drafts = (await listItems(page, "desk")).filter((item) => item.preview === content);
   expect(drafts.map((item) => item.status)).toEqual(["draft"]);
   expect(drafts[0]?.origin).toBe("manual");
+  await expect(page.getByTestId("composer-draft")).toHaveCount(0);
+  await expect(page.getByTestId("status-draft")).toHaveText("Saved");
+  await expect(page.getByTestId("schedule-zone")).toContainText("UTC");
   await page.getByTestId("save-draft").click();
-  await expect(page.getByText("Scheduled for")).toBeVisible();
+  await expect(page.getByText("Scheduled locally for")).toBeVisible();
   const scheduled = (await listItems(page, "desk")).filter((item) => item.preview === content);
   expect(scheduled.map((item) => ({ status: item.status, origin: item.origin }))).toEqual([{ status: "approved", origin: "manual" }]);
+  await expect(page.getByTestId("status-approved")).toHaveText("Awaiting signature");
   await page.reload();
   await expect(page.getByTestId("profile")).toHaveText("Desk");
   await page.getByTestId("nav-compose").click();
@@ -215,6 +219,16 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   await page.getByTestId("nav-compose").click();
   await expect(page.getByTestId("repair-note")).toBeVisible();
   await expect(page.getByTestId("save-draft")).toBeDisabled();
+  await expect(page.getByTestId("save-draft")).toHaveAttribute("aria-disabled", "true");
+  const repairPaint = await page.getByTestId("repair-profile").evaluate((node) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim();
+    document.body.append(probe);
+    const expected = getComputedStyle(probe).color;
+    probe.remove();
+    return { button: getComputedStyle(node).backgroundColor, expected };
+  });
+  expect(repairPaint.button).toBe(repairPaint.expected);
   await expect(page.getByTestId("writing-rules-note")).toHaveCount(0);
   const sentence = `Keep this sentence ${Date.now()}.`;
   await page.getByTestId("note-text").fill(sentence);
@@ -228,7 +242,7 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   await page.getByTestId("setup-continue").click();
   await page.getByTestId("setup-continue").click();
   await page.getByTestId("save-profile").click();
-  await expect(page.getByRole("heading", { name: "Write a note" })).toBeFocused();
+  await expect(page.getByTestId("note-text")).toBeFocused();
   await expect(page.getByTestId("note-text")).toHaveValue(sentence);
   await expect(page.getByTestId("schedule")).toHaveText(when);
   await expect(page.getByTestId("repair-note")).toHaveCount(0);
@@ -237,7 +251,7 @@ test("an invalid test profile is repaired without scheduling or rewriting policy
   expect(await listItems(page, "test")).toEqual([]);
   expect(readFileSync(kept, "utf8")).toBe(custom);
   await page.getByTestId("save-draft").click();
-  await expect(page.getByText("Scheduled for")).toBeVisible();
+  await expect(page.getByText("Scheduled locally for")).toBeVisible();
   const rows = (await listItems(page, "test")).filter((item) => item.preview === sentence);
   expect(rows).toHaveLength(1);
   expect(rows[0]?.status).toBe("approved");
@@ -338,7 +352,7 @@ for (const [theme, width] of frames) {
     const content = `Fresh ${theme} ${width} ${Date.now()}`;
     await page.getByTestId("note-text").fill(content);
     await page.getByTestId("save-draft").click();
-    await expect(page.getByText("Scheduled for")).toBeVisible();
+    await expect(page.getByText("Scheduled locally for")).toBeVisible();
     const rows = (await listItems(page, "desk")).filter((item) => item.preview === content);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "approved", origin: "manual" });
@@ -397,7 +411,7 @@ for (const [theme, width] of frames) {
     expect(readFileSync(kept, "utf8")).toBe(custom);
     await grab(page, `repaired-${theme}-${width}`, { editor: sentence, when, approved: 0, items: 0 });
     await page.getByTestId("save-draft").click();
-    await expect(page.getByText("Scheduled for")).toBeVisible();
+    await expect(page.getByText("Scheduled locally for")).toBeVisible();
     const rows = await listItems(page, "test");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "approved", origin: "manual", preview: sentence });

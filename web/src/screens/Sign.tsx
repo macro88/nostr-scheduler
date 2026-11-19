@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, EmptyState, Input } from "@macro88/ui";
 import { api, cancelBrowserSign, signWithBrowser, type Item, type Nip46Info, type Profile } from "../api";
 import { plainError } from "../errors";
-import { formatQueueWhen } from "../format";
+import { formatQueueWhen, localZoneLabel } from "../format";
 import { usePendingSurface } from "../pending";
 import { InlineError, LoadingBlock } from "../states";
 import { showCheck } from "../theme/motion";
@@ -150,8 +150,8 @@ export function Sign({ profile }: { profile: Profile }) {
                 </button>
                 <div>
                   <div className="row-status">
-                    <span className="status">Approved</span>
-                    <time>{item.fireAt[0] ? formatQueueWhen(item.fireAt[0]) : ""}</time>
+                    <span className="status">Awaiting signature</span>
+                    <time>{item.fireAt[0] ? `${formatQueueWhen(item.fireAt[0])} ${localZoneLabel(item.fireAt[0])}` : ""}</time>
                   </div>
                   <p className="note-lg">{item.preview}</p>
                 </div>
