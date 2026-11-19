@@ -1443,9 +1443,12 @@ select:focus-visible {
 @media (max-width: 480px) {
   .composer-foot { display: flex; flex-direction: column; }
   .composer-foot .composer-meta { order: 1; }
+  .composer-foot .error { order: 2; }
   .composer-foot .schedule-unknown { order: 2; }
   .composer-foot .composer-actions { order: 2; }
   .composer-foot .field-note { order: 3; }
+  .q-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .q-row time { grid-column: 1 / -1; }
 }
 
 .inbox-item.leaving {
