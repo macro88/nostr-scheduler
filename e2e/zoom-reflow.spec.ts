@@ -286,3 +286,52 @@ test("theme choices fit a 320 menu and the week grid scrolls", async ({ page }) 
   const afterWheel = await read();
   expect(afterWheel.left).toBeGreaterThan(afterKey.left + 40);
 });
+
+test("a long note scrolls inside the 320 editor", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  const lines = Array.from({ length: 10 }, (_, index) => `${String(index + 1).padStart(2, "0")} local note line here`);
+  const sentence = lines.join("\n");
+  expect(sentence.length).toBeLessThanOrEqual(280);
+  expect(sentence.length).toBeGreaterThan(200);
+  for (const theme of ["light", "dark"] as const) {
+    await page.addInitScript((value) => localStorage.setItem("nostr-scheduler-theme", value), theme);
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto("/");
+    await page.getByTestId("nav-compose").click();
+    const field = page.getByTestId("note-text");
+    await field.fill(sentence);
+    await field.focus();
+    const start = await field.evaluate((node) => {
+      const area = node as HTMLTextAreaElement;
+      area.setSelectionRange(0, 0);
+      area.scrollTop = 0;
+      return { scrollTop: area.scrollTop, scrollHeight: area.scrollHeight, clientHeight: area.clientHeight, length: area.value.length };
+    });
+    expect(start.scrollHeight).toBeGreaterThan(start.clientHeight + 8);
+    expect(start.scrollTop).toBe(0);
+    await page.keyboard.press("Control+End");
+    const end = await field.evaluate((node) => {
+      const area = node as HTMLTextAreaElement;
+      return { scrollTop: area.scrollTop, caret: area.selectionStart, length: area.value.length, value: area.value };
+    });
+    expect(end.caret).toBe(sentence.length);
+    expect(end.scrollTop).toBeGreaterThan(0);
+    expect(end.value).toBe(sentence);
+    for (let step = 0; step < 8; step += 1) await page.keyboard.press("ArrowUp");
+    const moved = await field.evaluate((node) => {
+      const area = node as HTMLTextAreaElement;
+      return { scrollTop: area.scrollTop, caret: area.selectionStart, value: area.value };
+    });
+    expect(moved.caret).toBeLessThan(sentence.length);
+    expect(moved.scrollTop).toBeLessThan(end.scrollTop);
+    expect(moved.value).toBe(sentence);
+    await page.keyboard.press("Control+Home");
+    const home = await field.evaluate((node) => {
+      const area = node as HTMLTextAreaElement;
+      return { scrollTop: area.scrollTop, caret: area.selectionStart, value: area.value };
+    });
+    expect(home.caret).toBe(0);
+    expect(home.scrollTop).toBeLessThan(36);
+    expect(home.value).toBe(sentence);
+  }
+});

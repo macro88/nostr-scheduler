@@ -7,7 +7,7 @@ import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
 import { InlineError } from "../states";
 import { notifySuccess } from "../toasts";
-import { flyScheduleChip, showCheck } from "../theme/motion";
+import { flyScheduleChip } from "../theme/motion";
 import { WhenField } from "../WhenField";
 
 type Kind = "note" | "thread" | "reply";
@@ -236,10 +236,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
       void queryClient.invalidateQueries({ queryKey: ["items"] });
       if (!same) return;
       const button = document.querySelector<HTMLElement>("[data-testid='save-draft']");
-      if (button) {
-        showCheck(button);
-        flyScheduleChip(button, formatWhen(whenNow.current));
-      }
+      if (button) flyScheduleChip(button, formatWhen(whenNow.current));
       setFormError(null);
       setDraftId(null);
       setNote("");

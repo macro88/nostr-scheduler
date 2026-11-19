@@ -380,3 +380,16 @@ test("a refused second copy is not reported as the first note", async ({ page })
   expect(rows).toHaveLength(1);
   expect(rows[0]?.draft?.content).toBe("Same words");
 });
+
+test("a successful schedule does not place a check on the reload hint", async ({ page }) => {
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  await openCompose(page, signer);
+  await page.getByTestId("note-text").fill("Scheduled without a check");
+  await page.getByTestId("save-draft").click();
+  await expect(page.getByText("Scheduled locally for")).toBeVisible();
+  await expect(page.locator(".motion-check")).toHaveCount(0);
+  await expect(page.getByTestId("keep-note")).toHaveText("Unsaved text is lost on reload. Save it to keep it in Queue.");
+  const rows = await items(page);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.status).toBe("approved");
+});
