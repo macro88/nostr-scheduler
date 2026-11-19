@@ -54,7 +54,7 @@ function sameSnapshot(left: Snapshot, right: Snapshot): boolean {
   return false;
 }
 
-type StoredMatch = "scheduled" | "absent" | "unread" | "open";
+type StoredMatch = "scheduled" | "absent" | "unread" | "open" | "held";
 
 function lostResponse(error: unknown): boolean {
   if (error instanceof ScheduleUnknown) return true;
@@ -89,13 +89,18 @@ async function readIntent(attempt: ScheduleAttempt): Promise<StoredMatch> {
   try {
     const items = await api<Item[]>(`/api/items?profileId=${attempt.profileId}`);
     const item = items.find((entry) => entry.id === attempt.intentId);
-    if (!item || !sameIntent(item, attempt)) return "absent";
+    if (!item) return "absent";
+    if (!sameIntent(item, attempt)) return "held";
     if (scheduledStatus.has(item.status)) return "scheduled";
     if (item.status === "draft") return "open";
-    return "absent";
+    return "held";
   } catch {
     return "unread";
   }
+}
+
+function idAlreadyUsed(error: unknown): boolean {
+  return error instanceof Error && /already used/i.test(error.message);
 }
 
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
@@ -146,13 +151,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   useLayoutEffect(() => {
     const node = editor.current;
     if (!node) return;
-    if (!window.matchMedia("(max-width: 800px)").matches) {
-      node.style.height = "";
-      return;
-    }
-    node.style.height = "auto";
-    node.style.height = `${Math.max(node.scrollHeight, 120)}px`;
-    node.scrollTop = 0;
+    node.style.height = "";
   }, [note, reply, parts, kind]);
   const title = kind === "thread" ? "Write a thread" : kind === "reply" ? "Write a reply" : "Write a note";
   const text = kind === "note" ? note : kind === "reply" ? reply : parts[0] ?? "";
@@ -196,7 +195,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         if (reusable) {
           const found = await readIntent(attempt);
           if (found === "scheduled") return { id: attempt.intentId, attempt };
-          if (found === "unread") {
+          if (found === "unread" || found === "held") {
             setUnconfirmed(attempt);
             throw new ScheduleUnknown();
           }
@@ -215,7 +214,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         if (error instanceof ScheduleUnknown || error instanceof ScheduleBusy || !attempt) throw error;
         const found = await readIntent(attempt);
         if (found === "scheduled") return { id: attempt.intentId, attempt };
-        if (lostResponse(error) || found === "unread" || found === "open") {
+        if (found === "held" || idAlreadyUsed(error) || lostResponse(error) || found === "unread" || found === "open") {
           setUnconfirmed(attempt);
           throw new ScheduleUnknown();
         }
@@ -287,6 +286,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   }
 
   const liveDraft = shownDraft();
+  const outcomeShowing = save.isPending || Boolean(formError) || Boolean(unconfirmed && liveDraft && unconfirmed.profileId === profile.id && sameSnapshot(unconfirmed.draft, liveDraft));
 
   return (
     <div className="split">
@@ -413,7 +413,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               </Button>
             </div>
           ) : null}
-          {profile.criteriaState === "absent" ? (
+          {profile.criteriaState === "absent" && !outcomeShowing ? (
             <p className="field-note" data-testid="keep-note">
               {keepCopy}
             </p>

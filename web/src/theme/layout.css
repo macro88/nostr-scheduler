@@ -1422,9 +1422,12 @@ nav { flex-wrap: wrap; }
   .log-row { grid-template-columns: 1fr; gap: var(--space-4) var(--space-12); }
   .editor {
     flex: 0 0 auto;
-    min-height: 7.5rem;
+    min-height: calc(36px * 3 + 16px);
+    max-height: calc(36px * 8 + 16px);
     height: auto;
-    overflow: hidden;
+    overflow: auto;
+    padding: 8px 0;
+    line-height: 36px;
     field-sizing: content;
   }
 }
@@ -1467,7 +1470,7 @@ select:focus-visible {
 html[data-fit="stack"] .split { display: flex; flex-direction: column; height: auto; }
 html[data-fit="stack"] .write-pane { height: auto; border-right: 0; padding-right: 0; }
 html[data-fit="stack"] .queue-pane { height: auto; padding-left: 0; overflow: visible; border-top: 1px solid var(--color-border); margin-top: var(--space-24); padding-top: var(--space-16); }
-html[data-fit="stack"] .editor { flex: 0 1 auto; min-height: 4.5rem; max-height: 5rem; }
+html[data-fit="stack"] .editor { flex: 0 1 auto; min-height: calc(36px * 3 + 16px); max-height: calc(36px * 8 + 16px); overflow: auto; }
 html[data-fit="stack"] main { height: auto; overflow: visible; }
 html[data-fit="stack"] .composer-actions { flex-wrap: wrap; }
 html[data-fit="stack"] .q-row { grid-template-columns: minmax(0, 1fr) auto; }

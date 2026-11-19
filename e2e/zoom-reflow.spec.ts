@@ -101,6 +101,9 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
     document.documentElement.style.zoom = "200%";
   });
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fit)).toBe("stack");
+  await page.getByTestId("save-draft").scrollIntoViewIfNeeded();
+  await page.getByTestId("save-draft").focus();
+  await expect(page.getByTestId("save-draft")).toBeFocused();
   const zoomed = await page.evaluate(() => {
     const button = document.querySelector("[data-testid='save-draft']");
     const note = document.querySelector("[data-testid='save-note']");
@@ -146,8 +149,12 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   await page.keyboard.down("Control");
   await page.keyboard.press("Equal");
   await page.keyboard.up("Control");
-  const chrome = await page.evaluate(() => ({ scale: window.visualViewport?.scale ?? 1, zoom: getComputedStyle(document.documentElement).zoom }));
-  expect(chrome.scale).toBe(1);
+  const chrome = await page.evaluate(() => ({
+    scale: window.visualViewport?.scale ?? 1,
+    dpr: window.devicePixelRatio,
+    innerWidth: window.innerWidth,
+    zoom: getComputedStyle(document.documentElement).zoom,
+  }));
   expect(chrome.zoom).toBe("1");
 
   const session = await page.context().newCDPSession(page);
@@ -156,4 +163,67 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   const pinch = await previewBox(page);
   expect(pinch.text).toBe("Zoom check");
   expect(pinch.width).toBeGreaterThan(80);
+});
+
+test("a three-line note fits in the focused 320 editor", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  await page.addInitScript(() => localStorage.setItem("nostr-scheduler-theme", "light"));
+  await compose(page, 320, 900);
+  const sentence = "A longer note for the narrow page so the date and the actions stay together.";
+  await page.getByTestId("note-text").fill(sentence);
+  await page.getByTestId("note-text").focus();
+  await expect(page.getByTestId("note-text")).toBeFocused();
+  const fit = await page.getByTestId("note-text").evaluate((node) => {
+    const field = node as HTMLTextAreaElement;
+    const style = getComputedStyle(node);
+    const mirror = document.createElement("div");
+    mirror.style.position = "absolute";
+    mirror.style.left = "0";
+    mirror.style.top = "0";
+    mirror.style.visibility = "hidden";
+    mirror.style.whiteSpace = "pre-wrap";
+    mirror.style.overflowWrap = "break-word";
+    mirror.style.width = `${node.clientWidth}px`;
+    mirror.style.font = style.font;
+    mirror.style.lineHeight = style.lineHeight;
+    mirror.style.letterSpacing = style.letterSpacing;
+    mirror.textContent = field.value;
+    document.body.append(mirror);
+    const needed = mirror.getBoundingClientRect().height;
+    mirror.remove();
+    return { clientHeight: field.clientHeight, needed, fontSize: style.fontSize, lineHeight: style.lineHeight };
+  });
+  expect(fit.lineHeight).toBe("36px");
+  expect(Number.parseFloat(fit.fontSize)).toBeGreaterThanOrEqual(20);
+  expect(fit.needed).toBeGreaterThan(36 * 2);
+  expect(fit.clientHeight).toBeGreaterThanOrEqual(fit.needed - 1);
+});
+
+test("the persistence hint hides while an outcome is showing", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByTestId("keep-note")).toHaveText("Unsaved text is lost on reload. Save it to keep it in Queue.");
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  await page.getByTestId("note-text").fill("Keep the draft");
+  await page.getByTestId("schedule").click();
+  await page.getByTestId("time-year").fill(String(yesterday.getFullYear()));
+  await page.getByTestId("time-month").fill(String(yesterday.getMonth() + 1));
+  await page.getByTestId("time-day").fill(String(yesterday.getDate()));
+  await page.getByTestId("time-apply").click();
+  await page.getByTestId("save-draft").click();
+  await expect(page.getByText("This time is in the past. Choose a time from now on.")).toBeVisible();
+  await expect(page.getByTestId("keep-note")).toHaveCount(0);
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByTestId("note-text")).toHaveValue("");
+  await expect(page.getByTestId("keep-note")).toBeVisible();
+  await page.getByTestId("note-text").fill("Keep the draft");
+  await page.getByTestId("save-note").click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByTestId("note-text")).toHaveValue("");
+  await expect(page.getByTestId("status-draft")).toHaveText("Saved");
+  await expect(page.getByText("Keep the draft")).toBeVisible();
 });
