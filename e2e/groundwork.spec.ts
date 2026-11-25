@@ -200,7 +200,7 @@ test("empty, loading, and error states", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("empty")).toContainText("Nothing is waiting.");
   await page.getByTestId("nav-calendar").click();
-  await expect(page.getByTestId("empty")).toContainText("Nothing is scheduled this week.");
+  await expect(page.getByTestId("empty")).toContainText("No notes in the queue.");
   await page.getByTestId("nav-log").click();
   await expect(page.getByTestId("empty")).toContainText("Nothing has been sent yet.");
   await page.getByTestId("nav-sign").click();
@@ -517,7 +517,7 @@ test("the time control uses a 24-hour British date and refuses the past", async 
   await page.getByTestId("time-apply").click();
   await page.getByTestId("note-text").fill("too late");
   await page.getByTestId("save-draft").click();
-  await expect(page.getByTestId("inline-error")).toContainText("This time is in the past.");
+  await expect(page.getByTestId("inline-error")).toContainText("Choose a future date and time.");
   await expect(page.getByTestId("inline-error")).not.toContainText("Technical detail");
   await expect(page.getByTestId("save-draft")).toBeEnabled();
   const ahead = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);

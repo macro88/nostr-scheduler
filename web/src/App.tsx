@@ -153,27 +153,10 @@ export function App() {
     <>
       <Toaster />
       <header>
-        <div className="brand-nav">
+        <div className="brand-row">
           <span className="wordmark">Scheduler</span>
           {ready && !repair ? (
-          <nav aria-label="Sections">
-            {views.map((name, index) => (
-              <button
-                key={name}
-                type="button"
-                data-testid={`nav-${name}`}
-                aria-current={view === name ? "page" : undefined}
-                onClick={() => setView(name)}
-              >
-                {sections[name]}
-                <span className="sr"> {index + 1}</span>
-              </button>
-            ))}
-          </nav>
-          ) : null}
-        </div>
-        {ready && !repair ? (
-        <div className="header-tools">
+          <div className="header-tools">
           <button
             ref={profileButton}
             type="button"
@@ -241,6 +224,23 @@ export function App() {
           ) : null}
         </div>
         ) : null}
+        </div>
+        {ready && !repair ? (
+        <nav aria-label="Sections">
+          {views.map((name, index) => (
+            <button
+              key={name}
+              type="button"
+              data-testid={`nav-${name}`}
+              aria-current={view === name ? "page" : undefined}
+              onClick={() => setView(name)}
+            >
+              {sections[name]}
+              <span className="sr"> {index + 1}</span>
+            </button>
+          ))}
+        </nav>
+        ) : null}
       </header>
       <main>
         {repair && selected ? (
@@ -286,7 +286,7 @@ export function App() {
         {selected && !manage && !repair && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
         {selected ? (
           <div hidden={repair || manage || view !== "compose"}>
-            <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} />
+            <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} onViewQueue={() => setView("calendar")} />
           </div>
         ) : null}
         {selected && !manage && !repair && view === "calendar" ? (

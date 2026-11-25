@@ -348,9 +348,9 @@ for (const [theme, width] of frames) {
     await page.getByTestId("save-profile").click();
     await expect(page.getByTestId("profile")).toHaveText("Desk");
     await expect(page.getByTestId("note-text")).toHaveValue("");
-    await expect(page.getByText("0 this week")).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Upcoming" }).getByText("No notes in the queue.")).toBeVisible();
     await expect(page.getByTestId("status-approved")).toHaveCount(0);
-    await grab(page, `compose-empty-${theme}-${width}`, { editor: "", approved: 0, week: "0 this week" });
+    await grab(page, `compose-empty-${theme}-${width}`, { editor: "", approved: 0, week: "No notes in the queue." });
     const content = `Fresh ${theme} ${width} ${Date.now()}`;
     await page.getByTestId("note-text").fill(content);
     await page.getByTestId("save-draft").click();

@@ -14,7 +14,7 @@ export function plainError(error: unknown): PlainError {
     return { message: pasteWarning, detail: pasteWarning };
   }
   if (text.includes("past") || text.includes("already passed")) {
-    const message = "This time is in the past. Choose a time from now on.";
+    const message = "Choose a future date and time.";
     return { message, detail: message };
   }
   if (text.includes("horizon") || text.includes("further ahead") || text.includes("7 day")) {

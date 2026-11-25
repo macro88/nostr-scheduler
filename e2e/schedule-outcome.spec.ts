@@ -106,7 +106,7 @@ test("a slow success stays pending and then shows one unsigned note", async ({ p
   const when = await page.getByTestId("schedule").innerText();
   await page.getByTestId("save-draft").click();
   await page.waitForTimeout(4000);
-  await expect(page.getByTestId("schedule-pending")).toHaveText("Scheduling this note.");
+  await expect(page.getByTestId("schedule-pending")).toHaveText("Scheduling…");
   await expect(page.getByTestId("schedule-unknown")).toHaveCount(0);
   await expect(page.getByText("Scheduled locally for")).toHaveCount(0);
   await expect(page.getByTestId("note-text")).toHaveValue(sentence);

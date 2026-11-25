@@ -13,7 +13,7 @@ import { WhenField } from "../WhenField";
 type Kind = "note" | "thread" | "reply";
 
 const unknownCopy = "This schedule is not confirmed yet. Check the queue, then try again if the note is not there.";
-const pendingCopy = "Scheduling this note.";
+const pendingCopy = "Scheduling…";
 
 class ScheduleUnknown extends Error {
   constructor() {
@@ -106,7 +106,7 @@ function idAlreadyUsed(error: unknown): boolean {
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
 const keepCopy = "Unsaved text is lost on reload. Save it to keep it in Queue.";
 
-export function Composer({ profile, onRepair, headingId }: { profile: Profile; onRepair?: () => void; headingId?: string }) {
+export function Composer({ profile, onRepair, onViewQueue, headingId }: { profile: Profile; onRepair?: () => void; onViewQueue?: () => void; headingId?: string }) {
   const queryClient = useQueryClient();
   const editor = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<Kind>("note");
@@ -301,16 +301,15 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
         </div>
         {kind === "note" ? (
           <>
-            <label className="editor-label" htmlFor="compose-note">Your note</label>
+            <label className="editor-label" htmlFor="compose-note">Write a note</label>
             <textarea
               id="compose-note"
               ref={editor}
             className="editor note-lg literata-reading"
             data-testid="note-text"
-            aria-label="Your note"
             aria-invalid={blocked || undefined}
             aria-describedby={blocked ? "private-key-alert" : undefined}
-            placeholder="Write here"
+            placeholder="Write a note"
             value={note}
             onChange={(event) => {
               revision.current += 1;
@@ -396,9 +395,11 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           </div>
         ) : null}
         <div className="composer-foot">
-          <div className="composer-meta">
+          <div className="composer-meta" role="group" aria-label="When and length">
+            <span className="meta-name">When</span>
             <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
-            <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
+            <span className="meta-name">Count</span>
+            <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"} aria-label={`${text.length} of 280 characters`}>
               {text.length} / 280
             </span>
           </div>
@@ -437,12 +438,26 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           </div>
         </div>
       </section>
-      <aside className="queue-pane">
+      <aside className="queue-pane" aria-label="Upcoming">
         <div className="pane-head">
-          <h2>Queue</h2>
-          <p className="page-kicker">{upcoming.length} this week</p>
+          <h2>Upcoming</h2>
+          <button type="button" className="text-link" data-testid="view-queue" onClick={() => onViewQueue?.()}>
+            View queue
+          </button>
         </div>
-        <div className="queue-list">
+        {queue.isPending && !queue.data ? <p data-testid="rail-loading">Loading queue…</p> : null}
+        <div className="rail-summary">
+          <p>{upcoming.length} upcoming</p>
+          {upcoming[0] ? (
+            <p>
+              <span className="when-unit">{upcoming[0].fireAt[0] ? formatQueueWhen(upcoming[0].fireAt[0]) : ""}</span>
+              {" "}
+              {upcoming[0].preview}
+            </p>
+          ) : null}
+        </div>
+        <div className="queue-list rail-list">
+          {queueRows.length === 0 && !queue.isPending ? <p>No notes in the queue.</p> : null}
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
               <time>

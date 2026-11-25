@@ -193,9 +193,9 @@ test("a three-line note fits in the focused 320 editor", async ({ page }) => {
     mirror.remove();
     return { clientHeight: field.clientHeight, needed, fontSize: style.fontSize, lineHeight: style.lineHeight };
   });
-  expect(fit.lineHeight).toBe("36px");
-  expect(Number.parseFloat(fit.fontSize)).toBeGreaterThanOrEqual(20);
-  expect(fit.needed).toBeGreaterThan(36 * 2);
+  expect(Number.parseFloat(fit.lineHeight) / Number.parseFloat(fit.fontSize)).toBeGreaterThan(1.5);
+  expect(Number.parseFloat(fit.fontSize)).toBeGreaterThanOrEqual(18);
+  expect(fit.needed).toBeGreaterThan(18 * 2);
   expect(fit.clientHeight).toBeGreaterThanOrEqual(fit.needed - 1);
 });
 
@@ -212,7 +212,7 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await page.getByTestId("time-day").fill(String(yesterday.getDate()));
   await page.getByTestId("time-apply").click();
   await page.getByTestId("save-draft").click();
-  await expect(page.getByText("This time is in the past. Choose a time from now on.")).toBeVisible();
+  await expect(page.getByText("Choose a future date and time.")).toBeVisible();
   await expect(page.getByTestId("keep-note")).toHaveCount(0);
   await page.reload();
   await page.getByTestId("nav-compose").click();
@@ -225,7 +225,7 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await page.getByTestId("nav-compose").click();
   await expect(page.getByTestId("note-text")).toHaveValue("");
   await expect(page.getByTestId("status-draft")).toHaveText("Saved");
-  await expect(page.getByText("Keep the draft")).toBeVisible();
+  await expect(page.locator(".q-preview", { hasText: "Keep the draft" })).toBeVisible();
 });
 
 test("theme choices fit a 320 menu and the week grid scrolls", async ({ page }) => {

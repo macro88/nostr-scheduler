@@ -150,6 +150,22 @@ A second run is safe. It clears the demo directory and produces a new event id.
 
 The browser checks use that same mock signer and the loopback relay. Run `pnpm exec playwright install chromium`, then `pnpm test:e2e`. Compose stays in the page, so an approved note is also in the queue. A sign check reads the sign list. On this HTTP page, a missing browser signer reports that an HTTPS-only extension will not appear.
 
+## Writing workspace
+
+Compose is a writing column with the note, the time, and Schedule. Upcoming notes sit in a side list on a wide window and collapse to a short summary on a narrow one. View queue opens the queue.
+
+The week board keeps each note at its recorded time. When several notes would cover one another, the board shows how many share that stretch, and the same notes are listed underneath with their own times, excerpts, and statuses.
+
+To look at that page locally, use a fresh directory and the loopback server. It does not sign or publish.
+
+```bash
+mkdir -p /tmp/nostr-scheduler-fresh
+printf 'profiles: []\n' > /tmp/nostr-scheduler-fresh/profiles.yaml
+NOSTR_SCHEDULER_MODE=test NOSTR_SCHEDULER_DATA=/tmp/nostr-scheduler-fresh PORT=4173 pnpm ui
+```
+
+Open `http://127.0.0.1:4173/`. Create a profile with a public npub and the browser-extension signer. No relay is required to write and schedule a local note.
+
 ## Local relay
 
 `pnpm relay:local` starts that same in-memory relay and leaves it running until Ctrl-C. It listens only on `127.0.0.1:7777`. It is a loopback test relay, and it never forwards an event to a real relay.
