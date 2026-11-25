@@ -434,6 +434,7 @@ button.check { padding: 0; }
   grid-template-columns: minmax(0, 720px) 280px;
   column-gap: var(--space-32);
   align-items: start;
+  align-content: start;
   justify-content: start;
   flex: 1;
   min-height: 0;
@@ -1088,11 +1089,11 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 
 /* ---------- v4: generous composer, no duplicate preview ---------- */
 .write-pane {
-  height: 100%;
+  height: auto;
+  align-self: start;
 }
 .editor {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 1 auto;
   height: auto;
   max-width: 720px;
   padding: 0;
@@ -1112,8 +1113,8 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 .composer-foot .composer-actions { margin-top: var(--space-16); }
 .composer-foot .error { margin-top: 10px; }
 
-/* Queue pane fills the column */
-.queue-pane { height: 100%; }
+/* The rail sizes to its own notes. It does not set the height of the writing column. */
+.queue-pane { height: auto; align-self: start; }
 .queue-list { flex: 1; }
 
 /* ---------- v4: inbox fills with work ---------- */
@@ -1520,6 +1521,16 @@ nav { flex-wrap: wrap; }
     line-height: 1.55;
     field-sizing: content;
   }
+  .overflow-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .overflow-row p {
+    width: 100%;
+    overflow-wrap: break-word;
+  }
 }
 .date-ctrl:focus-visible,
 textarea.editor:focus-visible,
@@ -1564,6 +1575,8 @@ html[data-fit="stack"] .editor { flex: 0 1 auto; min-height: calc(18px * 1.55 * 
 .rail-excerpt { margin: 0; overflow-wrap: break-word; }
 html[data-fit="stack"] .rail-summary { display: block; }
 html[data-fit="stack"] .rail-list { display: none; }
+html[data-fit="stack"] .overflow-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+html[data-fit="stack"] .overflow-row p { width: 100%; overflow-wrap: break-word; }
 @media (max-width: 1040px) {
   .split { grid-template-columns: minmax(0, 1fr); }
   .queue-pane { width: auto; border-left: 0; border-top: 1px solid var(--color-border); padding-left: 0; margin-top: var(--space-24); padding-top: var(--space-16); }
@@ -1576,10 +1589,12 @@ html[data-fit="stack"] .rail-list { display: none; }
   main { padding: var(--space-24) var(--space-32) var(--space-32); }
 }
 textarea.editor {
+  flex: 0 1 auto;
   font-size: 20px;
   line-height: 1.55;
   font-weight: 400;
   min-height: max(320px, 40vh);
+  height: auto;
 }
 @media (max-width: 1040px) {
   textarea.editor {

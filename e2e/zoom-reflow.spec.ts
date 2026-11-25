@@ -398,3 +398,133 @@ test("a later note is not described as an empty queue", async ({ page }) => {
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ preview: "Next week note", status: "approved" });
 });
+
+async function storeNotes(page: Page, notes: { content: string; fireAt: number }[]) {
+  await page.evaluate(async (items) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    for (const item of items) {
+      const response = await fetch("/api/compose", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: item.content, proposedFireAt: item.fireAt } }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+    }
+  }, notes);
+}
+
+test("a narrow overflow record keeps ordinary words whole", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  const start = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  const notes = [
+    "Friday cluster stays at its recorded minute.",
+    "Relay list empty. This note stays on the machine until a signer is used.",
+    "ok",
+    "https://example.invalid/path/with/a/very/long/segment/that/should/wrap/inside/the/record",
+  ].map((content, index) => ({ content, fireAt: start + index * 10 * 60 }));
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/");
+  await storeNotes(page, notes);
+  await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("view-week").click();
+  await expect(page.locator(".week-overflow h2")).toContainText(/\d+ notes, .+\d/);
+  const record = page.locator(".overflow-row", { hasText: "recorded minute" });
+  await record.scrollIntoViewIfNeeded();
+  const measure = await page.evaluate(() => {
+    const words = ["cluster", "machine", "recorded", "minute"];
+    return [...document.querySelectorAll(".overflow-row")].map((row) => {
+      const excerpt = row.querySelector("p");
+      const status = row.querySelector(".status-slot");
+      const time = row.querySelector("time");
+      const excerptBox = excerpt?.getBoundingClientRect();
+      const statusBox = status?.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      const textNode = excerpt?.firstChild;
+      const wordBoxes = words.flatMap((word) => {
+        const text = textNode?.textContent ?? "";
+        const index = text.indexOf(word);
+        if (!(textNode instanceof Text) || index < 0) return [];
+        const range = document.createRange();
+        range.setStart(textNode, index);
+        range.setEnd(textNode, index + word.length);
+        const rects = [...range.getClientRects()];
+        return [{ word, lines: rects.length, width: rects[0]?.width ?? 0 }];
+      });
+      return {
+        excerptWidth: excerptBox?.width ?? 0,
+        rowWidth: rowBox?.width ?? 0,
+        statusTop: statusBox?.top ?? 0,
+        excerptBottom: excerptBox?.bottom ?? 0,
+        timeText: time?.textContent ?? "",
+        statusText: status?.textContent ?? "",
+        words: wordBoxes,
+      };
+    });
+  });
+  expect(measure.length).toBeGreaterThanOrEqual(4);
+  const seen = new Set(measure.flatMap((row) => row.words.map((word) => word.word)));
+  expect([...seen].sort()).toEqual(["cluster", "machine", "minute", "recorded"]);
+  for (const row of measure) {
+    expect(row.excerptWidth).toBeGreaterThan(row.rowWidth * 0.75);
+    expect(row.statusTop).toBeGreaterThanOrEqual(row.excerptBottom - 1);
+    expect(row.timeText).toMatch(/^\d{2}:\d{2}$/);
+    expect(row.statusText).toBe("Awaiting signature");
+    for (const word of row.words) {
+      expect(word.lines).toBe(1);
+      expect(word.width).toBeGreaterThan(48);
+    }
+  }
+  const last = page.locator(".overflow-row").last();
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeVisible();
+  await expect(page.locator(".week-overflow h2")).toBeVisible();
+});
+
+test("a tall upcoming list leaves the schedule footer on the desktop", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  const start = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  const notes = [
+    "ok",
+    "https://example.invalid/path/with/a/very/long/segment/that/should/wrap/inside/the/record",
+    "Six words about a local queue item.",
+    "Relay list empty. This note stays on the machine until a signer is used.",
+    "xyzzy",
+    "Friday cluster stays at its recorded minute.",
+  ].map((content, index) => ({ content, fireAt: start + index * 8 * 60 }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await storeNotes(page, notes);
+  await page.getByTestId("nav-compose").click();
+  const typed = "A local note, six words, and https://example.invalid/queue/item.";
+  await page.getByTestId("note-text").fill(typed);
+  const geometry = await page.evaluate(() => {
+    const editor = document.querySelector("textarea.editor");
+    const foot = document.querySelector(".composer-foot");
+    const rail = document.querySelector(".queue-pane");
+    if (!(editor instanceof HTMLElement) || !foot || !rail) return null;
+    const editorBox = editor.getBoundingClientRect();
+    const footBox = foot.getBoundingClientRect();
+    const railBox = rail.getBoundingClientRect();
+    return {
+      editorClientWidth: editor.clientWidth,
+      editorOffsetWidth: editor.offsetWidth,
+      editorHeight: editorBox.height,
+      footTop: footBox.top,
+      footBottom: footBox.bottom,
+      railHeight: railBox.height,
+      innerHeight: window.innerHeight,
+    };
+  });
+  expect(geometry).not.toBeNull();
+  expect(geometry?.editorOffsetWidth).toBeGreaterThanOrEqual(640);
+  expect(geometry?.editorOffsetWidth).toBeLessThanOrEqual(720);
+  expect(geometry?.editorClientWidth).toBeGreaterThanOrEqual(640);
+  expect(geometry?.editorHeight).toBeGreaterThanOrEqual(320);
+  expect(geometry?.editorHeight).toBeLessThan(geometry?.innerHeight ?? 0);
+  expect(geometry?.railHeight ?? 0).toBeGreaterThan((geometry?.editorHeight ?? 0) + 80);
+  expect(geometry?.footTop ?? 0).toBeGreaterThan(0);
+  expect(geometry?.footBottom ?? 9999).toBeLessThanOrEqual(geometry?.innerHeight ?? 0);
+  await expect(page.getByTestId("save-draft")).toBeVisible();
+  await expect(page.getByTestId("note-text")).toHaveValue(typed);
+});
