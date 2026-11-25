@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
+import { startOfWeek } from "../web/src/format.ts";
 
 const dataDir = "e2e/run";
 
@@ -28,14 +29,19 @@ async function compose(page: Page, width: number, height: number) {
 }
 
 async function previewBox(page: Page) {
-  return page.locator(".q-preview").evaluate((node) => {
+  return page.evaluate(() => {
+    const nodes = [...document.querySelectorAll(".q-preview, .rail-excerpt")];
+    const node = nodes.find((item) => item.getBoundingClientRect().width > 0) ?? nodes[0];
+    if (!node) return { text: "", width: 0, right: 0, bottom: 0, statusLeft: 0, statusTop: 0 };
     const box = node.getBoundingClientRect();
     const status = node.parentElement?.querySelector(".status-slot")?.getBoundingClientRect();
     return {
       text: node.textContent ?? "",
       width: box.width,
       right: box.right,
-      statusLeft: status?.left ?? box.right,
+      bottom: box.bottom,
+      statusLeft: status?.left ?? box.left,
+      statusTop: status?.top ?? box.bottom,
     };
   });
 }
@@ -50,8 +56,8 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   await page.keyboard.press("Escape");
   const wide = await previewBox(page);
   expect(wide.text).toBe("Zoom check");
-  expect(wide.width).toBeGreaterThan(120);
-  expect(wide.statusLeft).toBeGreaterThanOrEqual(wide.right - 1);
+  expect(wide.width).toBeGreaterThan(200);
+  expect(wide.statusTop).toBeGreaterThanOrEqual(wide.bottom - 1);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const narrow = await previewBox(page);
@@ -108,7 +114,7 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
     const button = document.querySelector("[data-testid='save-draft']");
     const note = document.querySelector("[data-testid='save-note']");
     const date = document.querySelector("[data-testid='schedule']");
-    const preview = document.querySelector(".q-preview");
+    const preview = [...document.querySelectorAll(".q-preview, .rail-excerpt")].find((node) => node.getBoundingClientRect().width > 0) ?? null;
     const box = (node: Element | null) => node?.getBoundingClientRect();
     const buttonBox = box(button);
     const noteBox = box(note);
@@ -141,7 +147,7 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   const textResize = await previewBox(page);
   expect(textResize.text).toBe("Zoom check");
   expect(textResize.width).toBeGreaterThan(100);
-  expect(textResize.statusLeft).toBeGreaterThanOrEqual(textResize.right - 1);
+  expect(textResize.statusTop).toBeGreaterThanOrEqual(textResize.bottom - 1);
 
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
@@ -224,7 +230,7 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await page.reload();
   await page.getByTestId("nav-compose").click();
   await expect(page.getByTestId("note-text")).toHaveValue("");
-  await expect(page.getByTestId("status-draft")).toHaveText("Saved");
+  await expect(page.locator("[data-testid='status-draft']:visible")).toHaveText("Saved");
   await expect(page.locator(".q-preview", { hasText: "Keep the draft" })).toBeVisible();
 });
 
@@ -334,4 +340,61 @@ test("a long note scrolls inside the 320 editor", async ({ page }) => {
     expect(home.scrollTop).toBeLessThan(36);
     expect(home.value).toBe(sentence);
   }
+});
+
+test("a later note is not described as an empty queue", async ({ page }) => {
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  openData(signer);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByText("No notes in the queue.")).toBeVisible();
+  await expect(page.getByText("No notes scheduled this week.")).toHaveCount(0);
+
+  const thisWeek = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  await page.evaluate(async (fireAt) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    const response = await fetch("/api/compose", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": token },
+      body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: "This week note", proposedFireAt: fireAt } }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }, thisWeek);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.locator(".q-preview").filter({ hasText: "This week note" })).toBeVisible();
+  await expect(page.locator(".rail-excerpt")).toBeHidden();
+  await expect(page.getByText("No notes in the queue.")).toHaveCount(0);
+  await expect(page.getByText("No notes scheduled this week.")).toHaveCount(0);
+
+  openData(signer);
+  const now = Math.floor(Date.now() / 1000);
+  const weekEnd = Math.floor(startOfWeek(new Date()).getTime() / 1000) + 7 * 24 * 60 * 60;
+  const horizon = now + 7 * 24 * 60 * 60 - 120;
+  const later = Math.min(weekEnd + 60, horizon);
+  expect(later).toBeGreaterThanOrEqual(weekEnd);
+  expect(later).toBeLessThan(now + 7 * 24 * 60 * 60);
+  await page.evaluate(async (fireAt) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    const response = await fetch("/api/compose", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": token },
+      body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: "Next week note", proposedFireAt: fireAt } }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }, later);
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByText("No notes scheduled this week.")).toBeVisible();
+  await expect(page.getByText("No notes in the queue.")).toHaveCount(0);
+  await expect(page.getByText("Next week note")).toHaveCount(0);
+  const rows = await page.evaluate(async () => {
+    const response = await fetch("/api/items?profileId=desk");
+    return response.json() as Promise<{ preview: string; status: string }[]>;
+  });
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ preview: "Next week note", status: "approved" });
 });

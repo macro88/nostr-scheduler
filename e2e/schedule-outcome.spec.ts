@@ -118,7 +118,7 @@ test("a slow success stays pending and then shows one unsigned note", async ({ p
   expect(rows[0]?.status).toBe("approved");
   expect(rows[0]?.draft?.content).toBe(sentence);
   expect(rows[0]?.events).toBeUndefined();
-  await expect(page.getByTestId("status-approved")).toHaveText("Awaiting signature");
+  await expect(page.locator("[data-testid='status-approved']:visible")).toHaveText("Awaiting signature");
 });
 
 test("a late result does not clear a newer edit", async ({ page }) => {
@@ -369,6 +369,7 @@ test("a refused second copy is not reported as the first note", async ({ page })
   await page.getByTestId("note-text").fill("Same words");
   await page.getByTestId("save-draft").click();
   await expect(page.getByText("Scheduled locally for")).toBeVisible();
+  await page.mouse.move(0, 0);
   await expect(page.getByText("Scheduled locally for")).toBeHidden();
   await page.route("**/api/compose", (route) => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "The note could not be saved. Try again." }) }));
   await page.getByTestId("note-text").fill("Same words");

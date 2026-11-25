@@ -152,7 +152,7 @@ The browser checks use that same mock signer and the loopback relay. Run `pnpm e
 
 ## Writing workspace
 
-Compose is a writing column with the note, the time, and Schedule. Upcoming notes sit in a side list on a wide window and collapse to a short summary on a narrow one. View queue opens the queue.
+Compose is a writing column with the note, the time, and Schedule. On a wide window, Upcoming lists each note under its time, with the status on the line below. On a narrow window that list becomes one summary of the next note. View queue opens the queue.
 
 The week board keeps each note at its recorded time. When several notes would cover one another, the board shows how many share that stretch, and the same notes are listed underneath with their own times, excerpts, and statuses.
 

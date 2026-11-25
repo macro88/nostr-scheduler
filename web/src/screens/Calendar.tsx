@@ -308,10 +308,10 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
             const dayItems = visible.filter((item) => item.fireAt[0] && sameLocalDay(new Date(item.fireAt[0] * 1000), day));
             const crowded = clustersOf(dayItems).filter((group) => group.length > 1).flat();
             if (crowded.length === 0) return null;
-            const label = day.toLocaleDateString("en-GB", { weekday: "long" });
+            const label = day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
             return (
               <section key={day.toISOString()} aria-label={`${crowded.length} notes on ${label}`}>
-                <h2>{crowded.length} notes</h2>
+                <h2>{crowded.length} notes, {label}</h2>
                 {crowded.map((item) => (
                   <button key={item.id} type="button" className="overflow-row" data-testid="calendar-item" onClick={() => setSelected(item)}>
                     <time dateTime={new Date((item.fireAt[0] ?? 0) * 1000).toISOString()}>{formatClock(item.fireAt[0] ?? 0)}</time>

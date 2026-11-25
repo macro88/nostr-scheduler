@@ -141,8 +141,8 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
   });
   const weekStart = Math.floor(startOfWeek(new Date()).getTime() / 1000);
   const weekEnd = weekStart + 7 * 24 * 60 * 60;
-  const upcoming = (queue.data ?? [])
-    .filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status))
+  const stored = (queue.data ?? []).filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status));
+  const upcoming = stored
     .filter((item) => {
       const at = item.fireAt[0] ?? 0;
       return at >= weekStart && at < weekEnd;
@@ -288,7 +288,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
   return (
     <div className="split">
       <section className="write-pane">
-        <h1 {...(headingId ? { id: headingId } : {})} tabIndex={-1}>
+        <h1 id={headingId ?? "compose-heading"} tabIndex={-1}>
           {title}
         </h1>
         <div className="tabs" role="group" aria-label="Post kind">
@@ -300,13 +300,12 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
           ))}
         </div>
         {kind === "note" ? (
-          <>
-            <label className="editor-label" htmlFor="compose-note">Write a note</label>
-            <textarea
-              id="compose-note"
-              ref={editor}
+          <textarea
+            id="compose-note"
+            ref={editor}
             className="editor note-lg literata-reading"
             data-testid="note-text"
+            aria-labelledby={headingId ?? "compose-heading"}
             aria-invalid={blocked || undefined}
             aria-describedby={blocked ? "private-key-alert" : undefined}
             placeholder="Write a note"
@@ -319,8 +318,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
               if (blocked) return;
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
             }}
-          />
-          </>
+            />
         ) : null}
         {kind === "thread" ? (
           <div data-testid="thread-editor">
@@ -446,18 +444,25 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
           </button>
         </div>
         {queue.isPending && !queue.data ? <p data-testid="rail-loading">Loading queue…</p> : null}
+        {queueRows.length === 0 && !queue.isPending ? <p>{stored.length === 0 ? "No notes in the queue." : "No notes scheduled this week."}</p> : null}
         <div className="rail-summary">
-          <p>{upcoming.length} upcoming</p>
-          {upcoming[0] ? (
-            <p>
-              <span className="when-unit">{upcoming[0].fireAt[0] ? formatQueueWhen(upcoming[0].fireAt[0]) : ""}</span>
-              {" "}
-              {upcoming[0].preview}
-            </p>
+          {queueRows[0] ? (
+            <div className="rail-next">
+              <p>{upcoming.length} upcoming</p>
+              <time>
+                {queueRows[0].fireAt[0] ? (
+                  <>
+                    <span className="when-unit">{formatQueueWhen(queueRows[0].fireAt[0])}</span>
+                    <span className="when-unit">{localZoneLabel(queueRows[0].fireAt[0])}</span>
+                  </>
+                ) : null}
+              </time>
+              <p className="rail-excerpt">{queueRows[0].preview}</p>
+              <StatusMark status={queueRows[0].status} />
+            </div>
           ) : null}
         </div>
         <div className="queue-list rail-list">
-          {queueRows.length === 0 && !queue.isPending ? <p>No notes in the queue.</p> : null}
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
               <time>
