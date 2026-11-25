@@ -157,22 +157,66 @@ test("the writing well, type, footer, and section rules match the approved rhyth
   expect(phone?.scheduleH).toBeGreaterThanOrEqual(44);
 
   await compose(page, 320, 844);
-  const narrow = await page.evaluate(() => {
+  const upcomingBounds = () => page.evaluate(() => {
     const editor = document.querySelector("textarea.editor");
+    const rail = document.querySelector(".queue-pane");
+    const link = document.querySelector("[data-testid='view-queue']");
+    const rule = document.querySelector(".rail-next");
+    const excerpt = document.querySelector(".rail-excerpt");
+    const summary = document.querySelector(".rail-summary");
     const tab = document.querySelector(".tab");
     const date = document.querySelector("[data-testid='schedule']");
-    if (!(editor instanceof HTMLElement) || !(tab instanceof HTMLElement) || !(date instanceof HTMLElement)) return null;
+    if (!(editor instanceof HTMLElement) || !(rail instanceof HTMLElement) || !(link instanceof HTMLElement) || !(rule instanceof HTMLElement) || !(excerpt instanceof HTMLElement) || !(summary instanceof HTMLElement) || !(tab instanceof HTMLElement) || !(date instanceof HTMLElement)) return null;
+    const edge = (node: Element) => Math.round(node.getBoundingClientRect().right);
     return {
       h: editor.offsetHeight,
       tab: Math.round(tab.getBoundingClientRect().height),
       date: Math.round(date.getBoundingClientRect().height),
       horizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      editorW: editor.offsetWidth,
+      railW: rail.offsetWidth,
+      editorRight: edge(editor),
+      linkRight: edge(link),
+      ruleRight: edge(rule),
+      excerptRight: edge(excerpt),
+      summaryRight: edge(summary),
+      linkText: link.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      linkClient: link.clientWidth,
+      linkScroll: link.scrollWidth,
+      viewport: window.innerWidth,
     };
   });
+  const narrow = await upcomingBounds();
   expect(narrow?.h).toBe(148);
   expect(narrow?.tab).toBeGreaterThanOrEqual(44);
   expect(narrow?.date).toBeGreaterThanOrEqual(44);
   expect(narrow?.horizontal).toBe(0);
+  expect(narrow?.linkText).toBe("View queue");
+  expect(narrow?.railW ?? 999).toBeLessThanOrEqual((narrow?.editorW ?? 0) + 1);
+  expect(narrow?.linkRight ?? 999).toBeLessThanOrEqual((narrow?.editorRight ?? 0) + 1);
+  expect(narrow?.ruleRight ?? 999).toBeLessThanOrEqual((narrow?.editorRight ?? 0) + 1);
+  expect(narrow?.excerptRight ?? 999).toBeLessThanOrEqual((narrow?.editorRight ?? 0) + 1);
+  expect(narrow?.summaryRight ?? 999).toBeLessThanOrEqual((narrow?.editorRight ?? 0) + 1);
+  expect(narrow?.linkRight ?? 999).toBeLessThanOrEqual(narrow?.viewport ?? 0);
+  expect(narrow?.linkScroll ?? 999).toBeLessThanOrEqual((narrow?.linkClient ?? 0) + 1);
+
+  await page.getByTestId("profile").click();
+  await page.getByTestId("theme-dark").click();
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.scheme)).toBe("dark");
+  const narrowDark = await upcomingBounds();
+  expect(narrowDark?.linkText).toBe("View queue");
+  expect(narrowDark?.railW ?? 999).toBeLessThanOrEqual((narrowDark?.editorW ?? 0) + 1);
+  expect(narrowDark?.linkRight ?? 999).toBeLessThanOrEqual((narrowDark?.editorRight ?? 0) + 1);
+  expect(narrowDark?.ruleRight ?? 999).toBeLessThanOrEqual((narrowDark?.editorRight ?? 0) + 1);
+  expect(narrowDark?.excerptRight ?? 999).toBeLessThanOrEqual((narrowDark?.editorRight ?? 0) + 1);
+  expect(narrowDark?.summaryRight ?? 999).toBeLessThanOrEqual((narrowDark?.editorRight ?? 0) + 1);
+  expect(narrowDark?.linkScroll ?? 999).toBeLessThanOrEqual((narrowDark?.linkClient ?? 0) + 1);
+
+  await page.getByTestId("profile").click();
+  await page.getByTestId("theme-light").click();
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.scheme)).toBe("light");
 
   await page.getByTestId("note-text").fill("see nsec1notarealkeyxxxxxxxx in the note");
   const blocked = page.getByTestId("save-draft");

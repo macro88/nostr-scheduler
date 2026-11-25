@@ -630,6 +630,17 @@ textarea.editor[aria-invalid="true"]:focus-visible,
   justify-content: space-between;
   gap: var(--space-12);
   margin-bottom: var(--space-8);
+  min-width: 0;
+  max-width: 100%;
+}
+.queue-pane .pane-head h2,
+.queue-pane .text-link {
+  min-width: 0;
+}
+.rail-summary,
+.rail-next {
+  min-width: 0;
+  max-width: 100%;
 }
 .queue-list { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .q-row {
@@ -1606,9 +1617,20 @@ select:focus-visible {
 }
 html[data-fit="stack"] .split { display: flex; flex-direction: column; height: auto; }
 html[data-fit="stack"] .write-pane { height: auto; border-right: 0; padding-right: 0; }
-html[data-fit="stack"] .queue-pane { height: auto; padding-left: 0; overflow: visible; border-top: 0; margin-top: 16px; padding-top: 0; }
+html[data-fit="stack"] .queue-pane {
+  align-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  padding-left: 0;
+  overflow: visible;
+  border-top: 0;
+  margin-top: 16px;
+  padding-top: 0;
+}
 html[data-fit="stack"] .editor { flex: 0 1 auto; height: 148px; min-height: 148px; max-height: 148px; overflow: auto; padding: 18px; font-size: 20px; line-height: 1.55; field-sizing: fixed; }
-.rail-excerpt { margin: 4px 0 0; overflow-wrap: break-word; font-family: var(--font-body); font-size: 22px; line-height: 1.45; font-weight: 400; }
+.rail-excerpt { margin: 4px 0 0; max-width: 100%; min-width: 0; overflow-wrap: break-word; font-family: var(--font-body); font-size: 22px; line-height: 1.45; font-weight: 400; }
 .sum-count { margin: 0; color: var(--color-text); font-family: var(--font-body); font-size: 14px; line-height: 1.4; font-weight: 700; }
 .rail-next time {
   display: flex;
@@ -1622,7 +1644,17 @@ html[data-fit="stack"] .overflow-row { display: flex; flex-direction: column; al
 html[data-fit="stack"] .overflow-row p { width: 100%; overflow-wrap: break-word; }
 @media (max-width: 1040px) {
   .split { grid-template-columns: minmax(0, 1fr); }
-  .queue-pane { width: auto; border-left: 0; border-top: 0; padding-left: 0; margin-top: 16px; padding-top: 0; }
+  .queue-pane {
+    align-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-left: 0;
+    border-top: 0;
+    padding-left: 0;
+    margin-top: 16px;
+    padding-top: 0;
+  }
   .rail-summary { display: block; }
   .rail-list { display: none; }
   .editor { height: 148px; min-height: 148px; max-height: 148px; padding: 18px; font-size: 20px; field-sizing: fixed; }
