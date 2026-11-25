@@ -1573,6 +1573,12 @@ html[data-fit="stack"] .write-pane { height: auto; border-right: 0; padding-righ
 html[data-fit="stack"] .queue-pane { height: auto; padding-left: 0; overflow: visible; border-top: 1px solid var(--color-border); margin-top: var(--space-24); padding-top: var(--space-16); }
 html[data-fit="stack"] .editor { flex: 0 1 auto; min-height: calc(18px * 1.55 * 4 + 16px); max-height: calc(18px * 1.55 * 8 + 16px); overflow: auto; font-size: 18px; line-height: 1.55; }
 .rail-excerpt { margin: 0; overflow-wrap: break-word; }
+.rail-next time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-8);
+  min-width: 0;
+}
 html[data-fit="stack"] .rail-summary { display: block; }
 html[data-fit="stack"] .rail-list { display: none; }
 html[data-fit="stack"] .overflow-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }

@@ -528,3 +528,65 @@ test("a tall upcoming list leaves the schedule footer on the desktop", async ({ 
   await expect(page.getByTestId("save-draft")).toBeVisible();
   await expect(page.getByTestId("note-text")).toHaveValue(typed);
 });
+
+for (const zone of ["UTC", "Asia/Hong_Kong"] as const) {
+  test.describe(`upcoming summary in ${zone}`, () => {
+    test.use({ timezoneId: zone });
+
+    test("keeps a visible gap between the clock and the zone", async ({ page }) => {
+      openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+      const fireAt = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/");
+      await storeNotes(page, [{ content: "Zone check note", fireAt }]);
+      const typed = "A local note for the narrow summary.";
+      for (const width of [320, 390]) {
+        for (const theme of ["light", "dark"]) {
+          await page.setViewportSize({ width, height: 844 });
+          await page.evaluate((value) => localStorage.setItem("nostr-scheduler-theme", value), theme);
+          await page.reload();
+          await page.getByTestId("nav-compose").click();
+          await page.getByTestId("note-text").fill(typed);
+          await page.locator(".rail-next").scrollIntoViewIfNeeded();
+          const geometry = await page.evaluate(() => {
+            const units = [...document.querySelectorAll(".rail-next .when-unit")].map((node) => {
+              const box = node.getBoundingClientRect();
+              return { text: node.textContent ?? "", left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+            });
+            const summary = document.querySelector(".rail-summary");
+            const list = document.querySelector(".rail-list");
+            const editor = document.querySelector("textarea.editor");
+            return {
+              units,
+              zoneName: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              editorLength: editor instanceof HTMLTextAreaElement ? editor.value.length : 0,
+              summaryDisplay: summary ? getComputedStyle(summary).display : "",
+              listDisplay: list ? getComputedStyle(list).display : "",
+              horizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            };
+          });
+          expect(geometry.zoneName).toBe(zone);
+          expect(geometry.innerWidth).toBe(width);
+          expect(geometry.editorLength).toBe(typed.length);
+          expect(geometry.summaryDisplay).toBe("block");
+          expect(geometry.listDisplay).toBe("none");
+          expect(geometry.horizontal).toBe(0);
+          expect(geometry.units).toHaveLength(2);
+          const clock = geometry.units[0];
+          const label = geometry.units[1];
+          if (!clock || !label) throw new Error("the summary did not render a clock and a zone");
+          expect(clock.text).toMatch(/^(Today|Tomorrow), \d{2}:\d{2}$/);
+          expect(label.text).toBe(zone === "UTC" ? "UTC" : "Hong Kong UTC+08:00");
+          expect(clock.width).toBeGreaterThan(0);
+          expect(label.width).toBeGreaterThan(0);
+          const beside = label.left >= clock.right + 4 && label.top < clock.bottom && clock.top < label.bottom;
+          const below = label.top >= clock.bottom - 1;
+          const overlaps = clock.left < label.right && label.left < clock.right && clock.top < label.bottom && label.top < clock.bottom;
+          expect(overlaps).toBe(false);
+          expect(beside || below).toBe(true);
+        }
+      }
+    });
+  });
+}
