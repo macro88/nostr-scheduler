@@ -17,8 +17,8 @@ function wipeData() {
 
 const themeKey = "nostr-scheduler-theme";
 const themeBackground = {
-  light: "rgb(230, 231, 230)",
-  dark: "rgb(20, 21, 21)",
+  light: "rgb(245, 242, 247)",
+  dark: "rgb(22, 16, 24)",
 } as const;
 
 function themeOf(name: string): "light" | "dark" {

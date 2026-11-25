@@ -4,6 +4,7 @@
 @import "@macro88/theme-nostr/theme.css";
 @import "@macro88/theme-nostr/motion.css";
 @import "@macro88/ui/styles.css";
+@import "./brand.css";
 @source "../../../node_modules/@macro88/ui/dist";
 
 @layer base {

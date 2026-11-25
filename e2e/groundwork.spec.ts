@@ -580,7 +580,8 @@ test("the page does not load a forbidden typeface", async ({ page }) => {
     const nodes = [document.body, document.querySelector("h1"), document.querySelector(".wordmark"), document.querySelector(".editor")].filter(Boolean);
     return nodes.map((node) => getComputedStyle(node as Element).fontFamily).join(" | ");
   });
-  expect(families).toContain("Be Vietnam Pro");
+  expect(families).toContain("Atkinson Hyperlegible");
+  expect(families).not.toMatch(/Literata|Be Vietnam Pro/);
   expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto/i);
   await relay.stop();
 });

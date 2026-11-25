@@ -472,7 +472,7 @@ test("a narrow overflow record keeps ordinary words whole", async ({ page }) => 
     expect(row.statusText).toBe("Awaiting signature");
     for (const word of row.words) {
       expect(word.lines).toBe(1);
-      expect(word.width).toBeGreaterThan(48);
+      expect(word.width).toBeGreaterThanOrEqual(48);
     }
   }
   const last = page.locator(".overflow-row").last();

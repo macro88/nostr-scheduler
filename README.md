@@ -109,7 +109,7 @@ node src/cli/main.ts disconnect
 
 `pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
 
-The interface uses the shared Nostr theme from `@macro88/theme-nostr`. UI text is Be Vietnam Pro. Notes are Literata. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document.
+The interface uses the shared Nostr theme from `@macro88/theme-nostr` for unbranded components. This app sets its own colours and loads Atkinson Hyperlegible for interface text and notes. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document. The font licence is `web/src/theme/fonts/AtkinsonHyperlegible-OFL.txt`.
 
 ## Design system
 
