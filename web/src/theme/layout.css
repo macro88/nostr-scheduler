@@ -1053,11 +1053,11 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 
 .hour-label.is-now { visibility: hidden; }
 
-/* ---------- v4: Literata optical sizes, lining figures ---------- */
+/* Static face, lining figures. Atkinson has no optical axis. */
 .note-text, .detail-note, .editor, .preview-note, .q-preview, .inbox-item .preview,
 .thread q, .work-row p, .log-row p, .slot-item p, .wevt p, .next-up-copy p, .sign-note {
   font-family: var(--font-body);
-  font-optical-sizing: auto;
+  font-optical-sizing: none;
   font-variant-numeric: lining-nums;
   font-feature-settings: "kern" 1, "liga" 1, "lnum" 1, "onum" 0;
 }
@@ -1065,7 +1065,7 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 .detail-note, .sign-note {
   font-size: var(--text-display-sm);
   line-height: 36px;
-  font-variation-settings: "opsz" 22, "wght" 400;
+  font-variation-settings: normal;
   letter-spacing: -0.005em;
 }
 .editor {
@@ -1199,7 +1199,7 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 .work-row p {
   font-size: 20px;
   line-height: 32px;
-  font-variation-settings: "opsz" 20, "wght" 400;
+  font-variation-settings: normal;
   max-width: 34rem;
 }
 .work-row time {
@@ -1256,7 +1256,7 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 .work-row p {
   font-size: var(--text-display-sm);
   line-height: 36px;
-  font-variation-settings: "opsz" 22, "wght" 400;
+  font-variation-settings: normal;
   max-width: 40rem;
 }
 .ink-rule {
