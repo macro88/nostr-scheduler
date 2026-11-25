@@ -394,11 +394,15 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
         ) : null}
         <div className="composer-foot">
           <div className="composer-meta" role="group" aria-label="When and length">
-            <span className="meta-name">When</span>
-            <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
-            <span className="meta-name">Count</span>
-            <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"} aria-label={`${text.length} of 280 characters`}>
-              {text.length} / 280
+            <span className="meta-pair">
+              <span className="meta-name">When</span>
+              <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
+            </span>
+            <span className="meta-pair">
+              <span className="meta-name">Count</span>
+              <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"} aria-label={`${text.length} of 280 characters`}>
+                {text.length} / 280
+              </span>
             </span>
           </div>
           {profile.criteriaState === "invalid" ? (
@@ -448,7 +452,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
         <div className="rail-summary">
           {queueRows[0] ? (
             <div className="rail-next">
-              <p>{upcoming.length} upcoming</p>
+              <p className="sum-count">{upcoming.length} upcoming</p>
               <time>
                 {queueRows[0].fireAt[0] ? (
                   <>

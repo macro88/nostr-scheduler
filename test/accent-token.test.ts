@@ -123,6 +123,13 @@ describe("accent token", () => {
     expect(hits([...accents, ...accentFg])).toEqual([]);
   });
 
+  test("the writing overlay leaves accent foreground on the published theme", () => {
+    const brand = readFileSync(join(root, "web/src/theme/brand.css"), "utf8");
+    expect(brand).not.toMatch(/--color-accent-fg\s*:/);
+    expect(brand).not.toMatch(/--color-status-accent-fg\s*:/);
+    expect(brand).toContain("accent-fg");
+  });
+
   test("retired green values are gone", () => {
     expect(hits(retiredGreen, true)).toEqual([]);
   });

@@ -37,6 +37,8 @@
   --radius-control: 6px;
   accent-color: var(--color-accent);
   font-size-adjust: from-font;
+  /* --color-accent-fg and --color-status-accent-fg stay on the published theme.
+     This overlay does not replace them. */
 }
 
 [data-theme="nostr"][data-scheme="dark"] {

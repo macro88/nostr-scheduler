@@ -109,7 +109,7 @@ node src/cli/main.ts disconnect
 
 `pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
 
-The interface uses the shared Nostr theme from `@macro88/theme-nostr` for unbranded components. This app then loads `web/src/theme/brand.css`, which replaces that theme's role colours, radii, and font roles. `data-theme="nostr"` stays so the published theme's structure still applies. The file is an app overlay. It does not republish `@macro88/theme-nostr`. Atkinson Hyperlegible is self-hosted for interface text and notes. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document. The font licence is `web/src/theme/fonts/AtkinsonHyperlegible-OFL.txt`.
+The interface uses the shared Nostr theme from `@macro88/theme-nostr` for unbranded components. This app then loads `web/src/theme/brand.css`, which replaces that theme's role colours, radii, and font roles. `data-theme="nostr"` stays so the published theme's structure still applies. The file is an app overlay. It does not republish `@macro88/theme-nostr`. Accent foreground and the accent status foreground stay on the published theme. Atkinson Hyperlegible is self-hosted for interface text and notes. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document. The font licence is `web/src/theme/fonts/AtkinsonHyperlegible-OFL.txt`. The writing sizes, the 44px kind and date targets, and the footer alignment live in `web/src/theme/layout.css`.
 
 ## Design system
 
