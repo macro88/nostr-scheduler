@@ -139,6 +139,7 @@ export function WhenField({
         </svg>
         {formatWhen(value)}
       </button>
+      <span className="meta-name">Zone</span>
       <span className="schedule-zone" data-testid="schedule-zone">{localZoneLabel(value)}</span>
       {open
         ? createPortal(

@@ -13,7 +13,7 @@ describe("formatWhen", () => {
 describe("plainError", () => {
   test("hides technical failures behind a next step", () => {
     expect(plainError(new Error("refusing to sign a created_at in the past")).message).toBe(
-      "This time is in the past. Choose a time from now on.",
+      "Choose a future date and time.",
     );
     expect(plainError(new Error("refusing to sign more than the sign-ahead horizon")).message).toBe(
       "This time is further ahead than you can sign. Choose a time within the next seven days.",

@@ -17,8 +17,8 @@ function wipeData() {
 
 const themeKey = "nostr-scheduler-theme";
 const themeBackground = {
-  light: "rgb(230, 231, 230)",
-  dark: "rgb(20, 21, 21)",
+  light: "rgb(245, 242, 247)",
+  dark: "rgb(22, 16, 24)",
 } as const;
 
 function themeOf(name: string): "light" | "dark" {
@@ -170,14 +170,14 @@ test("a new profile schedules and saves a manual note without a criteria file", 
   expect(drafts.map((item) => item.status)).toEqual(["draft"]);
   expect(drafts[0]?.origin).toBe("manual");
   await expect(page.getByTestId("composer-draft")).toHaveCount(0);
-  await expect(page.getByTestId("status-draft")).toHaveText("Saved");
+  await expect(page.locator("[data-testid='status-draft']:visible")).toHaveText("Saved");
   await expect(page.getByTestId("schedule-zone")).toHaveText(/^(UTC|.+ UTC[+-]\d{2}:\d{2})$/);
   await expect(page.getByTestId("schedule-zone")).not.toHaveText(/UTC UTC/);
   await page.getByTestId("save-draft").click();
   await expect(page.getByText("Scheduled locally for")).toBeVisible();
   const scheduled = (await listItems(page, "desk")).filter((item) => item.preview === content);
   expect(scheduled.map((item) => ({ status: item.status, origin: item.origin }))).toEqual([{ status: "approved", origin: "manual" }]);
-  await expect(page.getByTestId("status-approved")).toHaveText("Awaiting signature");
+  await expect(page.locator("[data-testid='status-approved']:visible")).toHaveText("Awaiting signature");
   await page.reload();
   await expect(page.getByTestId("profile")).toHaveText("Desk");
   await page.getByTestId("nav-compose").click();
@@ -348,9 +348,9 @@ for (const [theme, width] of frames) {
     await page.getByTestId("save-profile").click();
     await expect(page.getByTestId("profile")).toHaveText("Desk");
     await expect(page.getByTestId("note-text")).toHaveValue("");
-    await expect(page.getByText("0 this week")).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Upcoming" }).getByText("No notes in the queue.")).toBeVisible();
     await expect(page.getByTestId("status-approved")).toHaveCount(0);
-    await grab(page, `compose-empty-${theme}-${width}`, { editor: "", approved: 0, week: "0 this week" });
+    await grab(page, `compose-empty-${theme}-${width}`, { editor: "", approved: 0, week: "No notes in the queue." });
     const content = `Fresh ${theme} ${width} ${Date.now()}`;
     await page.getByTestId("note-text").fill(content);
     await page.getByTestId("save-draft").click();
@@ -358,7 +358,7 @@ for (const [theme, width] of frames) {
     const rows = (await listItems(page, "desk")).filter((item) => item.preview === content);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "approved", origin: "manual" });
-    await expect(page.getByTestId("status-approved")).toHaveCount(1);
+    await expect(page.locator("[data-testid='status-approved']:visible")).toHaveCount(1);
     await expect(page.getByTestId("note-text")).toHaveValue("");
     await grab(page, `fresh-scheduled-${theme}-${width}`, { preview: content, status: "approved", count: 1 });
   });
@@ -418,7 +418,7 @@ for (const [theme, width] of frames) {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: "approved", origin: "manual", preview: sentence });
     await expect(page.getByTestId("note-text")).toHaveValue("");
-    await expect(page.getByTestId("status-approved")).toHaveCount(1);
+    await expect(page.locator("[data-testid='status-approved']:visible")).toHaveCount(1);
     expect(readFileSync(kept, "utf8")).toBe(custom);
     await grab(page, `scheduled-${theme}-${width}`, { editor: "", preview: sentence, status: "approved", count: 1 });
   });

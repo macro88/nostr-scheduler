@@ -109,7 +109,7 @@ node src/cli/main.ts disconnect
 
 `pnpm ui` builds the React app and serves it with the API on `127.0.0.1:4173`. The page talks only to that process. The CLI and the MCP server are unchanged.
 
-The interface uses the shared Nostr theme from `@macro88/theme-nostr`. UI text is Be Vietnam Pro. Notes are Literata. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document.
+The interface uses the shared Nostr theme from `@macro88/theme-nostr` for unbranded components. This app then loads `web/src/theme/brand.css`, which replaces that theme's role colours, radii, and font roles. `data-theme="nostr"` stays so the published theme's structure still applies. The file is an app overlay. It does not republish `@macro88/theme-nostr`. Accent foreground and the accent status foreground stay on the published theme. Atkinson Hyperlegible is self-hosted for interface text and notes. Copyable values, such as a bunker link, use IBM Plex Mono. Light is the default. Dark follows the system, and the header switches `data-scheme` on the document. The font licence is `web/src/theme/fonts/AtkinsonHyperlegible-OFL.txt`. The writing sizes, the 44px kind and date targets, and the footer alignment live in `web/src/theme/layout.css`. On a narrow window the Upcoming column uses the writing column's width, so the heading, the queue link, and the rule stay inside that column while a long note wraps.
 
 ## Design system
 
@@ -149,6 +149,22 @@ A second run is safe. It clears the demo directory and produces a new event id.
 `pnpm demo:harness` signs one kind-1 note, publishes it to the local relay, and reads it back. It prints `accepted <id>` and `read <id>`.
 
 The browser checks use that same mock signer and the loopback relay. Run `pnpm exec playwright install chromium`, then `pnpm test:e2e`. Compose stays in the page, so an approved note is also in the queue. A sign check reads the sign list. On this HTTP page, a missing browser signer reports that an HTTPS-only extension will not appear.
+
+## Writing workspace
+
+Compose is a writing column with the note, the time, and Schedule. On a wide window, Upcoming lists each note under its time, with the status on the line below. On a narrow window that list becomes one summary of the next note. View queue opens the queue.
+
+The week board keeps each note at its recorded time. When several notes would cover one another, the board shows how many share that stretch, and the same notes are listed underneath with their own times, excerpts, and statuses.
+
+To look at that page locally, use a fresh directory and the loopback server. It does not sign or publish.
+
+```bash
+mkdir -p /tmp/nostr-scheduler-fresh
+printf 'profiles: []\n' > /tmp/nostr-scheduler-fresh/profiles.yaml
+NOSTR_SCHEDULER_MODE=test NOSTR_SCHEDULER_DATA=/tmp/nostr-scheduler-fresh PORT=4173 pnpm ui
+```
+
+Open `http://127.0.0.1:4173/`. Create a profile with a public npub and the browser-extension signer. No relay is required to write and schedule a local note.
 
 ## Local relay
 

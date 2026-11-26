@@ -13,7 +13,7 @@ import { WhenField } from "../WhenField";
 type Kind = "note" | "thread" | "reply";
 
 const unknownCopy = "This schedule is not confirmed yet. Check the queue, then try again if the note is not there.";
-const pendingCopy = "Scheduling this note.";
+const pendingCopy = "Scheduling…";
 
 class ScheduleUnknown extends Error {
   constructor() {
@@ -106,7 +106,7 @@ function idAlreadyUsed(error: unknown): boolean {
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
 const keepCopy = "Unsaved text is lost on reload. Save it to keep it in Queue.";
 
-export function Composer({ profile, onRepair, headingId }: { profile: Profile; onRepair?: () => void; headingId?: string }) {
+export function Composer({ profile, onRepair, onViewQueue, headingId }: { profile: Profile; onRepair?: () => void; onViewQueue?: () => void; headingId?: string }) {
   const queryClient = useQueryClient();
   const editor = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<Kind>("note");
@@ -141,8 +141,8 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   });
   const weekStart = Math.floor(startOfWeek(new Date()).getTime() / 1000);
   const weekEnd = weekStart + 7 * 24 * 60 * 60;
-  const upcoming = (queue.data ?? [])
-    .filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status))
+  const stored = (queue.data ?? []).filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status));
+  const upcoming = stored
     .filter((item) => {
       const at = item.fireAt[0] ?? 0;
       return at >= weekStart && at < weekEnd;
@@ -288,7 +288,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
   return (
     <div className="split">
       <section className="write-pane">
-        <h1 {...(headingId ? { id: headingId } : {})} tabIndex={-1}>
+        <h1 id={headingId ?? "compose-heading"} tabIndex={-1}>
           {title}
         </h1>
         <div className="tabs" role="group" aria-label="Post kind">
@@ -300,17 +300,15 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           ))}
         </div>
         {kind === "note" ? (
-          <>
-            <label className="editor-label" htmlFor="compose-note">Your note</label>
-            <textarea
-              id="compose-note"
-              ref={editor}
+          <textarea
+            id="compose-note"
+            ref={editor}
             className="editor note-lg literata-reading"
             data-testid="note-text"
-            aria-label="Your note"
+            aria-labelledby={headingId ?? "compose-heading"}
             aria-invalid={blocked || undefined}
             aria-describedby={blocked ? "private-key-alert" : undefined}
-            placeholder="Write here"
+            placeholder="Write a note"
             value={note}
             onChange={(event) => {
               revision.current += 1;
@@ -320,8 +318,7 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
               if (blocked) return;
               if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
             }}
-          />
-          </>
+            />
         ) : null}
         {kind === "thread" ? (
           <div data-testid="thread-editor">
@@ -396,10 +393,16 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           </div>
         ) : null}
         <div className="composer-foot">
-          <div className="composer-meta">
-            <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
-            <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"}>
-              {text.length} / 280
+          <div className="composer-meta" role="group" aria-label="When and length">
+            <span className="meta-pair">
+              <span className="meta-name">When</span>
+              <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
+            </span>
+            <span className="meta-pair">
+              <span className="meta-name">Count</span>
+              <span className="char-count" aria-live={text.length > 280 ? "polite" : "off"} aria-label={`${text.length} of 280 characters`}>
+                {text.length} / 280
+              </span>
             </span>
           </div>
           {profile.criteriaState === "invalid" ? (
@@ -437,12 +440,33 @@ export function Composer({ profile, onRepair, headingId }: { profile: Profile; o
           </div>
         </div>
       </section>
-      <aside className="queue-pane">
+      <aside className="queue-pane" aria-label="Upcoming">
         <div className="pane-head">
-          <h2>Queue</h2>
-          <p className="page-kicker">{upcoming.length} this week</p>
+          <h2>Upcoming</h2>
+          <button type="button" className="text-link" data-testid="view-queue" onClick={() => onViewQueue?.()}>
+            View queue
+          </button>
         </div>
-        <div className="queue-list">
+        {queue.isPending && !queue.data ? <p data-testid="rail-loading">Loading queue…</p> : null}
+        {queueRows.length === 0 && !queue.isPending ? <p>{stored.length === 0 ? "No notes in the queue." : "No notes scheduled this week."}</p> : null}
+        <div className="rail-summary">
+          {queueRows[0] ? (
+            <div className="rail-next">
+              <p className="sum-count">{upcoming.length} upcoming</p>
+              <time>
+                {queueRows[0].fireAt[0] ? (
+                  <>
+                    <span className="when-unit">{formatQueueWhen(queueRows[0].fireAt[0])}</span>
+                    <span className="when-unit">{localZoneLabel(queueRows[0].fireAt[0])}</span>
+                  </>
+                ) : null}
+              </time>
+              <p className="rail-excerpt">{queueRows[0].preview}</p>
+              <StatusMark status={queueRows[0].status} />
+            </div>
+          ) : null}
+        </div>
+        <div className="queue-list rail-list">
           {queueRows.map((item) => (
             <article key={item.id} className="q-row" data-testid={item.id === "composer-draft" ? "composer-draft" : undefined}>
               <time>

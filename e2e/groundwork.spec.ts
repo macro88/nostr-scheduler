@@ -200,7 +200,7 @@ test("empty, loading, and error states", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("empty")).toContainText("Nothing is waiting.");
   await page.getByTestId("nav-calendar").click();
-  await expect(page.getByTestId("empty")).toContainText("Nothing is scheduled this week.");
+  await expect(page.getByTestId("empty")).toContainText("No notes in the queue.");
   await page.getByTestId("nav-log").click();
   await expect(page.getByTestId("empty")).toContainText("Nothing has been sent yet.");
   await page.getByTestId("nav-sign").click();
@@ -517,7 +517,7 @@ test("the time control uses a 24-hour British date and refuses the past", async 
   await page.getByTestId("time-apply").click();
   await page.getByTestId("note-text").fill("too late");
   await page.getByTestId("save-draft").click();
-  await expect(page.getByTestId("inline-error")).toContainText("This time is in the past.");
+  await expect(page.getByTestId("inline-error")).toContainText("Choose a future date and time.");
   await expect(page.getByTestId("inline-error")).not.toContainText("Technical detail");
   await expect(page.getByTestId("save-draft")).toBeEnabled();
   const ahead = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
@@ -576,12 +576,46 @@ test("the page does not load a forbidden typeface", async ({ page }) => {
   const url = await relay.start();
   profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
   await page.goto("/");
-  const families = await page.evaluate(() => {
+  const families = await page.evaluate(async () => {
+    await document.fonts.ready;
     const nodes = [document.body, document.querySelector("h1"), document.querySelector(".wordmark"), document.querySelector(".editor")].filter(Boolean);
     return nodes.map((node) => getComputedStyle(node as Element).fontFamily).join(" | ");
   });
-  expect(families).toContain("Be Vietnam Pro");
+  expect(families).toContain("Atkinson Hyperlegible");
+  expect(families).not.toMatch(/Literata|Be Vietnam Pro/);
   expect(families).not.toMatch(/Inter|Geist|Instrument|Fraunces|Space Grotesk|Public Sans|Source Serif|Roboto/i);
+  await page.evaluate(() => localStorage.setItem("nostr-scheduler-theme", "light"));
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.scheme)).toBe("light");
+  const light = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const root = getComputedStyle(document.documentElement);
+    const sample = document.querySelector(".wordmark") ?? document.body;
+    return {
+      bg: root.getPropertyValue("--color-bg").trim().toLowerCase(),
+      body: root.getPropertyValue("--font-body"),
+      variation: getComputedStyle(sample).fontVariationSettings,
+      loaded: document.fonts.check("16px \"Atkinson Hyperlegible\""),
+    };
+  });
+  expect(light.bg).toBe("#f5f2f7");
+  expect(light.body).toContain("Atkinson Hyperlegible");
+  expect(light.variation).toBe("normal");
+  expect(light.loaded).toBe(true);
+  await page.evaluate(() => localStorage.setItem("nostr-scheduler-theme", "dark"));
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.scheme)).toBe("dark");
+  const dark = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    return {
+      bg: root.getPropertyValue("--color-bg").trim().toLowerCase(),
+      surface: root.getPropertyValue("--color-surface").trim().toLowerCase(),
+      accentOn: root.getPropertyValue("--color-accent-on").trim().toLowerCase(),
+    };
+  });
+  expect(dark.bg).toBe("#161018");
+  expect(dark.surface).toBe("#2c2236");
+  expect(dark.accentOn).toBe("#160e1a");
   await relay.stop();
 });
 

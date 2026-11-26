@@ -15,6 +15,20 @@ const weekOpen = 7;
 const weekClose = 23;
 const dayOpen = 8;
 const dayClose = 21;
+const clusterGapSeconds = 75 * 60;
+
+function clustersOf(items: Item[]): Item[][] {
+  const sorted = [...items].sort((left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0));
+  const groups: Item[][] = [];
+  for (const item of sorted) {
+    const at = item.fireAt[0] ?? 0;
+    const current = groups.at(-1);
+    const previous = current?.at(-1)?.fireAt[0] ?? 0;
+    if (current && at - previous < clusterGapSeconds) current.push(item);
+    else groups.push([item]);
+  }
+  return groups;
+}
 
 export function Calendar({ profileId, canSend = true }: { profileId: string; canSend?: boolean }) {
   const queryClient = useQueryClient();
@@ -202,14 +216,15 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
       ) : null}
       {publish.error ? <InlineError error={publish.error} /> : null}
       {items.isPending && !items.data && !surface.loading ? <p className="sr">Loading the queue</p> : null}
-      <LoadingBlock pending={surface.loading} label="Loading the queue" />
+      <LoadingBlock pending={surface.loading} label="Loading queue…" />
       {items.isError ? <InlineError error={items.error} fallback="The queue could not be loaded. Try again." /> : null}
       {surface.ready && !items.isError && visible.length === 0 ? (
         <div data-testid="empty">
-          <EmptyState title={mode === "week" ? "Nothing is scheduled this week." : "Nothing is scheduled this day."} />
+          <EmptyState title="No notes in the queue." />
         </div>
       ) : null}
       {surface.ready && mode === "week" ? (
+        <>
         <div
           className="week-scroll"
           ref={boardRef}
@@ -262,27 +277,53 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
                   <span className="sr">Now, {formatWhen(now)}</span>
                 </div>
               ) : null}
-              {days.map((day) => (
+              {days.map((day) => {
+                const dayItems = visible.filter((item) => item.fireAt[0] && sameLocalDay(new Date(item.fireAt[0] * 1000), day));
+                return (
                 <div key={day.toISOString()} className={`lane${sameLocalDay(day, now) ? " today" : ""}`}>
-                  {visible
-                    .filter((item) => item.fireAt[0] && sameLocalDay(new Date(item.fireAt[0] * 1000), day))
-                    .map((item) => {
-                      const date = new Date((item.fireAt[0] ?? 0) * 1000);
-                      const fraction = (date.getHours() + date.getMinutes() / 60 - openHour) / span;
-                      return (
-                        <WeekCard
-                          key={item.id}
-                          item={item}
-                          top={`${Math.min(Math.max(fraction, 0), 0.92) * 100}%`}
-                          onSelect={() => setSelected(item)}
-                        />
-                      );
-                    })}
+                  {clustersOf(dayItems).map((group) => {
+                    const first = group[0];
+                    if (!first?.fireAt[0]) return null;
+                    const date = new Date(first.fireAt[0] * 1000);
+                    const fraction = (date.getHours() + date.getMinutes() / 60 - openHour) / span;
+                    const top = `${Math.min(Math.max(fraction, 0), 0.92) * 100}%`;
+                    if (group.length === 1) {
+                      return <WeekCard key={first.id} item={first} top={top} onSelect={() => setSelected(first)} />;
+                    }
+                    return (
+                      <div key={first.id} className="wevt-stack" style={{ top }} data-testid="week-stack">
+                        <p>{group.length} notes</p>
+                        <time dateTime={new Date(first.fireAt[0] * 1000).toISOString()}>{formatClock(first.fireAt[0])}</time>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
+        <div className="week-overflow">
+          {days.map((day) => {
+            const dayItems = visible.filter((item) => item.fireAt[0] && sameLocalDay(new Date(item.fireAt[0] * 1000), day));
+            const crowded = clustersOf(dayItems).filter((group) => group.length > 1).flat();
+            if (crowded.length === 0) return null;
+            const label = day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+            return (
+              <section key={day.toISOString()} aria-label={`${crowded.length} notes on ${label}`}>
+                <h2>{crowded.length} notes, {label}</h2>
+                {crowded.map((item) => (
+                  <button key={item.id} type="button" className="overflow-row" data-testid="calendar-item" onClick={() => setSelected(item)}>
+                    <time dateTime={new Date((item.fireAt[0] ?? 0) * 1000).toISOString()}>{formatClock(item.fireAt[0] ?? 0)}</time>
+                    <p>{item.preview}</p>
+                    <StatusMark status={item.status} />
+                  </button>
+                ))}
+              </section>
+            );
+          })}
+        </div>
+        </>
       ) : null}
       {surface.ready && mode === "day" ? (
         <div className="timetable" data-testid="day-grid" ref={boardRef}>

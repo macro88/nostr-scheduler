@@ -1,0 +1,82 @@
+/* Scheduler-owned theme composition.
+   Loaded after @macro88/theme-nostr/theme.css.
+   data-theme="nostr" stays so the published theme's structure still applies.
+   This file replaces that theme's role values. It is not a new foundation
+   and it does not republish @macro88/theme-nostr. */
+
+[data-theme="nostr"] {
+  --font-display: "Atkinson Hyperlegible", Verdana, sans-serif;
+  --font-body: "Atkinson Hyperlegible", Verdana, sans-serif;
+  --color-bg: #F5F2F7;
+  --color-surface: #FFFFFF;
+  --color-text: #1C1224;
+  --color-muted: #5A4764;
+  --color-accent-on: #FFFFFF;
+  --color-accent-subtle: #E4D9EC;
+  --color-selected: #E4D9EC;
+  --color-today: #EDE8F2;
+  --color-skeleton: #E4D9EC;
+  --color-border: #D2C4DC;
+  --color-border-strong: #6E587C;
+  --color-danger-fg: #9E2F45;
+  --color-danger-bg: #F6E4E8;
+  --color-status-neutral-fg: #5A4764;
+  --color-status-neutral-bg: #FFFFFF;
+  --color-status-accent-bg: #E4D9EC;
+  --color-status-success-fg: #1E4632;
+  --color-status-success-bg: #E7F2EA;
+  --color-status-warning-fg: #5C4010;
+  --color-status-warning-bg: #F4EBD4;
+  --color-status-danger-fg: #9E2F45;
+  --color-status-danger-bg: #F6E4E8;
+  --color-status-info-fg: #3D2A4E;
+  --color-status-info-bg: #EDE6F3;
+  --color-disabled-bg: #D9D0E2;
+  --color-disabled-fg: #5A4764;
+  --radius-field: 10px;
+  --radius-control: 6px;
+  accent-color: var(--color-accent);
+  font-size-adjust: from-font;
+  /* --color-accent-fg and --color-status-accent-fg stay on the published theme.
+     This overlay does not replace them. */
+}
+
+[data-theme="nostr"][data-scheme="dark"] {
+  color-scheme: dark;
+  --color-bg: #161018;
+  --color-surface: #2C2236;
+  --color-text: #F7F2FA;
+  --color-muted: #D2C0DA;
+  --color-accent-on: #160E1A;
+  --color-accent-subtle: #3A2C44;
+  --color-selected: #3A2C44;
+  --color-today: #241C2C;
+  --color-skeleton: #3A2C44;
+  --color-border: #453650;
+  --color-border-strong: #A08AAD;
+  --color-danger-fg: #FFB4C0;
+  --color-danger-bg: #3A2430;
+  --color-status-neutral-fg: #D2C0DA;
+  --color-status-neutral-bg: #2C2236;
+  --color-status-accent-bg: #3A2C44;
+  --color-status-success-fg: #C9E4D2;
+  --color-status-success-bg: #24382E;
+  --color-status-warning-fg: #F0D7A0;
+  --color-status-warning-bg: #3A3020;
+  --color-status-danger-fg: #FFB4C0;
+  --color-status-danger-bg: #3A2430;
+  --color-status-info-fg: #D2C0DA;
+  --color-status-info-bg: #2C2236;
+  --color-disabled-bg: #3A2C44;
+  --color-disabled-fg: #D2C0DA;
+  accent-color: var(--color-accent);
+}
+
+/* The published theme sets Literata optical axes on these classes.
+   Atkinson is a static face, so those axes must not apply. */
+[data-theme="nostr"] .literata-reading,
+[data-theme="nostr"] .literata-excerpt,
+[data-theme="nostr"] .literata-preview {
+  font-variation-settings: normal;
+  font-optical-sizing: none;
+}

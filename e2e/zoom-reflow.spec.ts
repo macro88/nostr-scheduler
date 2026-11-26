@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { createMockSigner } from "../src/mock-signer/index.ts";
+import { startOfWeek } from "../web/src/format.ts";
 
 const dataDir = "e2e/run";
 
@@ -28,14 +29,19 @@ async function compose(page: Page, width: number, height: number) {
 }
 
 async function previewBox(page: Page) {
-  return page.locator(".q-preview").evaluate((node) => {
+  return page.evaluate(() => {
+    const nodes = [...document.querySelectorAll(".q-preview, .rail-excerpt")];
+    const node = nodes.find((item) => item.getBoundingClientRect().width > 0) ?? nodes[0];
+    if (!node) return { text: "", width: 0, right: 0, bottom: 0, statusLeft: 0, statusTop: 0 };
     const box = node.getBoundingClientRect();
     const status = node.parentElement?.querySelector(".status-slot")?.getBoundingClientRect();
     return {
       text: node.textContent ?? "",
       width: box.width,
       right: box.right,
-      statusLeft: status?.left ?? box.right,
+      bottom: box.bottom,
+      statusLeft: status?.left ?? box.left,
+      statusTop: status?.top ?? box.bottom,
     };
   });
 }
@@ -50,8 +56,8 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   await page.keyboard.press("Escape");
   const wide = await previewBox(page);
   expect(wide.text).toBe("Zoom check");
-  expect(wide.width).toBeGreaterThan(120);
-  expect(wide.statusLeft).toBeGreaterThanOrEqual(wide.right - 1);
+  expect(wide.width).toBeGreaterThan(200);
+  expect(wide.statusTop).toBeGreaterThanOrEqual(wide.bottom - 1);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const narrow = await previewBox(page);
@@ -108,7 +114,7 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
     const button = document.querySelector("[data-testid='save-draft']");
     const note = document.querySelector("[data-testid='save-note']");
     const date = document.querySelector("[data-testid='schedule']");
-    const preview = document.querySelector(".q-preview");
+    const preview = [...document.querySelectorAll(".q-preview, .rail-excerpt")].find((node) => node.getBoundingClientRect().width > 0) ?? null;
     const box = (node: Element | null) => node?.getBoundingClientRect();
     const buttonBox = box(button);
     const noteBox = box(note);
@@ -141,7 +147,7 @@ test("zoom and reflow keep the schedule actions and the queue preview readable",
   const textResize = await previewBox(page);
   expect(textResize.text).toBe("Zoom check");
   expect(textResize.width).toBeGreaterThan(100);
-  expect(textResize.statusLeft).toBeGreaterThanOrEqual(textResize.right - 1);
+  expect(textResize.statusTop).toBeGreaterThanOrEqual(textResize.bottom - 1);
 
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
@@ -193,9 +199,9 @@ test("a three-line note fits in the focused 320 editor", async ({ page }) => {
     mirror.remove();
     return { clientHeight: field.clientHeight, needed, fontSize: style.fontSize, lineHeight: style.lineHeight };
   });
-  expect(fit.lineHeight).toBe("36px");
-  expect(Number.parseFloat(fit.fontSize)).toBeGreaterThanOrEqual(20);
-  expect(fit.needed).toBeGreaterThan(36 * 2);
+  expect(Number.parseFloat(fit.lineHeight) / Number.parseFloat(fit.fontSize)).toBeGreaterThan(1.5);
+  expect(Number.parseFloat(fit.fontSize)).toBeGreaterThanOrEqual(18);
+  expect(fit.needed).toBeGreaterThan(18 * 2);
   expect(fit.clientHeight).toBeGreaterThanOrEqual(fit.needed - 1);
 });
 
@@ -212,7 +218,7 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await page.getByTestId("time-day").fill(String(yesterday.getDate()));
   await page.getByTestId("time-apply").click();
   await page.getByTestId("save-draft").click();
-  await expect(page.getByText("This time is in the past. Choose a time from now on.")).toBeVisible();
+  await expect(page.getByText("Choose a future date and time.")).toBeVisible();
   await expect(page.getByTestId("keep-note")).toHaveCount(0);
   await page.reload();
   await page.getByTestId("nav-compose").click();
@@ -224,8 +230,8 @@ test("the persistence hint hides while an outcome is showing", async ({ page }) 
   await page.reload();
   await page.getByTestId("nav-compose").click();
   await expect(page.getByTestId("note-text")).toHaveValue("");
-  await expect(page.getByTestId("status-draft")).toHaveText("Saved");
-  await expect(page.getByText("Keep the draft")).toBeVisible();
+  await expect(page.locator("[data-testid='status-draft']:visible")).toHaveText("Saved");
+  await expect(page.locator(".q-preview", { hasText: "Keep the draft" })).toBeVisible();
 });
 
 test("theme choices fit a 320 menu and the week grid scrolls", async ({ page }) => {
@@ -335,3 +341,252 @@ test("a long note scrolls inside the 320 editor", async ({ page }) => {
     expect(home.value).toBe(sentence);
   }
 });
+
+test("a later note is not described as an empty queue", async ({ page }) => {
+  const signer = createMockSigner({ NOSTR_SCHEDULER_MODE: "test" });
+  openData(signer);
+  await page.goto("/");
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByText("No notes in the queue.")).toBeVisible();
+  await expect(page.getByText("No notes scheduled this week.")).toHaveCount(0);
+
+  const thisWeek = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  await page.evaluate(async (fireAt) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    const response = await fetch("/api/compose", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": token },
+      body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: "This week note", proposedFireAt: fireAt } }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }, thisWeek);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.locator(".q-preview").filter({ hasText: "This week note" })).toBeVisible();
+  await expect(page.locator(".rail-excerpt")).toBeHidden();
+  await expect(page.getByText("No notes in the queue.")).toHaveCount(0);
+  await expect(page.getByText("No notes scheduled this week.")).toHaveCount(0);
+
+  openData(signer);
+  const now = Math.floor(Date.now() / 1000);
+  const weekEnd = Math.floor(startOfWeek(new Date()).getTime() / 1000) + 7 * 24 * 60 * 60;
+  const horizon = now + 7 * 24 * 60 * 60 - 120;
+  const later = Math.min(weekEnd + 60, horizon);
+  expect(later).toBeGreaterThanOrEqual(weekEnd);
+  expect(later).toBeLessThan(now + 7 * 24 * 60 * 60);
+  await page.evaluate(async (fireAt) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    const response = await fetch("/api/compose", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": token },
+      body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: "Next week note", proposedFireAt: fireAt } }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }, later);
+  await page.reload();
+  await page.getByTestId("nav-compose").click();
+  await expect(page.getByText("No notes scheduled this week.")).toBeVisible();
+  await expect(page.getByText("No notes in the queue.")).toHaveCount(0);
+  await expect(page.getByText("Next week note")).toHaveCount(0);
+  const rows = await page.evaluate(async () => {
+    const response = await fetch("/api/items?profileId=desk");
+    return response.json() as Promise<{ preview: string; status: string }[]>;
+  });
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ preview: "Next week note", status: "approved" });
+});
+
+async function storeNotes(page: Page, notes: { content: string; fireAt: number }[]) {
+  await page.evaluate(async (items) => {
+    const session = await fetch("/api/session");
+    const token = ((await session.json()) as { token: string }).token;
+    for (const item of items) {
+      const response = await fetch("/api/compose", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ profileId: "desk", draft: { type: "note", content: item.content, proposedFireAt: item.fireAt } }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+    }
+  }, notes);
+}
+
+test("a narrow overflow record keeps ordinary words whole", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  const start = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  const notes = [
+    "Friday cluster stays at its recorded minute.",
+    "Relay list empty. This note stays on the machine until a signer is used.",
+    "ok",
+    "https://example.invalid/path/with/a/very/long/segment/that/should/wrap/inside/the/record",
+  ].map((content, index) => ({ content, fireAt: start + index * 10 * 60 }));
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/");
+  await storeNotes(page, notes);
+  await page.getByTestId("nav-calendar").click();
+  await page.getByTestId("view-week").click();
+  await expect(page.locator(".week-overflow h2")).toContainText(/\d+ notes, .+\d/);
+  const record = page.locator(".overflow-row", { hasText: "recorded minute" });
+  await record.scrollIntoViewIfNeeded();
+  const measure = await page.evaluate(() => {
+    const words = ["cluster", "machine", "recorded", "minute"];
+    return [...document.querySelectorAll(".overflow-row")].map((row) => {
+      const excerpt = row.querySelector("p");
+      const status = row.querySelector(".status-slot");
+      const time = row.querySelector("time");
+      const excerptBox = excerpt?.getBoundingClientRect();
+      const statusBox = status?.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      const textNode = excerpt?.firstChild;
+      const wordBoxes = words.flatMap((word) => {
+        const text = textNode?.textContent ?? "";
+        const index = text.indexOf(word);
+        if (!(textNode instanceof Text) || index < 0) return [];
+        const range = document.createRange();
+        range.setStart(textNode, index);
+        range.setEnd(textNode, index + word.length);
+        const rects = [...range.getClientRects()];
+        return [{ word, lines: rects.length, width: rects[0]?.width ?? 0 }];
+      });
+      return {
+        excerptWidth: excerptBox?.width ?? 0,
+        rowWidth: rowBox?.width ?? 0,
+        statusTop: statusBox?.top ?? 0,
+        excerptBottom: excerptBox?.bottom ?? 0,
+        timeText: time?.textContent ?? "",
+        statusText: status?.textContent ?? "",
+        words: wordBoxes,
+      };
+    });
+  });
+  expect(measure.length).toBeGreaterThanOrEqual(4);
+  const seen = new Set(measure.flatMap((row) => row.words.map((word) => word.word)));
+  expect([...seen].sort()).toEqual(["cluster", "machine", "minute", "recorded"]);
+  for (const row of measure) {
+    expect(row.excerptWidth).toBeGreaterThan(row.rowWidth * 0.75);
+    expect(row.statusTop).toBeGreaterThanOrEqual(row.excerptBottom - 1);
+    expect(row.timeText).toMatch(/^\d{2}:\d{2}$/);
+    expect(row.statusText).toBe("Awaiting signature");
+    for (const word of row.words) {
+      expect(word.lines).toBe(1);
+      expect(word.width).toBeGreaterThanOrEqual(48);
+    }
+  }
+  const last = page.locator(".overflow-row").last();
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeVisible();
+  await expect(page.locator(".week-overflow h2")).toBeVisible();
+});
+
+test("a tall upcoming list leaves the schedule footer on the desktop", async ({ page }) => {
+  openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+  const start = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+  const notes = [
+    "ok",
+    "https://example.invalid/path/with/a/very/long/segment/that/should/wrap/inside/the/record",
+    "Six words about a local queue item.",
+    "Relay list empty. This note stays on the machine until a signer is used.",
+    "xyzzy",
+    "Friday cluster stays at its recorded minute.",
+  ].map((content, index) => ({ content, fireAt: start + index * 8 * 60 }));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await storeNotes(page, notes);
+  await page.getByTestId("nav-compose").click();
+  const typed = "A local note, six words, and https://example.invalid/queue/item.";
+  await page.getByTestId("note-text").fill(typed);
+  const geometry = await page.evaluate(() => {
+    const editor = document.querySelector("textarea.editor");
+    const foot = document.querySelector(".composer-foot");
+    const rail = document.querySelector(".queue-pane");
+    if (!(editor instanceof HTMLElement) || !foot || !rail) return null;
+    const editorBox = editor.getBoundingClientRect();
+    const footBox = foot.getBoundingClientRect();
+    const railBox = rail.getBoundingClientRect();
+    return {
+      editorClientWidth: editor.clientWidth,
+      editorOffsetWidth: editor.offsetWidth,
+      editorHeight: editorBox.height,
+      footTop: footBox.top,
+      footBottom: footBox.bottom,
+      railHeight: railBox.height,
+      innerHeight: window.innerHeight,
+    };
+  });
+  expect(geometry).not.toBeNull();
+  expect(geometry?.editorOffsetWidth).toBeGreaterThanOrEqual(640);
+  expect(geometry?.editorOffsetWidth).toBeLessThanOrEqual(720);
+  expect(geometry?.editorClientWidth).toBeGreaterThanOrEqual(640);
+  expect(geometry?.editorHeight).toBeGreaterThanOrEqual(320);
+  expect(geometry?.editorHeight).toBeLessThan(geometry?.innerHeight ?? 0);
+  expect(geometry?.railHeight ?? 0).toBeGreaterThan((geometry?.editorHeight ?? 0) + 80);
+  expect(geometry?.footTop ?? 0).toBeGreaterThan(0);
+  expect(geometry?.footBottom ?? 9999).toBeLessThanOrEqual(geometry?.innerHeight ?? 0);
+  await expect(page.getByTestId("save-draft")).toBeVisible();
+  await expect(page.getByTestId("note-text")).toHaveValue(typed);
+});
+
+for (const zone of ["UTC", "Asia/Hong_Kong"] as const) {
+  test.describe(`upcoming summary in ${zone}`, () => {
+    test.use({ timezoneId: zone });
+
+    test("keeps a visible gap between the clock and the zone", async ({ page }) => {
+      openData(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }));
+      const fireAt = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/");
+      await storeNotes(page, [{ content: "Zone check note", fireAt }]);
+      const typed = "A local note for the narrow summary.";
+      for (const width of [320, 390]) {
+        for (const theme of ["light", "dark"]) {
+          await page.setViewportSize({ width, height: 844 });
+          await page.evaluate((value) => localStorage.setItem("nostr-scheduler-theme", value), theme);
+          await page.reload();
+          await page.getByTestId("nav-compose").click();
+          await page.getByTestId("note-text").fill(typed);
+          await page.locator(".rail-next").scrollIntoViewIfNeeded();
+          const geometry = await page.evaluate(() => {
+            const units = [...document.querySelectorAll(".rail-next .when-unit")].map((node) => {
+              const box = node.getBoundingClientRect();
+              return { text: node.textContent ?? "", left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+            });
+            const summary = document.querySelector(".rail-summary");
+            const list = document.querySelector(".rail-list");
+            const editor = document.querySelector("textarea.editor");
+            return {
+              units,
+              zoneName: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              editorLength: editor instanceof HTMLTextAreaElement ? editor.value.length : 0,
+              summaryDisplay: summary ? getComputedStyle(summary).display : "",
+              listDisplay: list ? getComputedStyle(list).display : "",
+              horizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            };
+          });
+          expect(geometry.zoneName).toBe(zone);
+          expect(geometry.innerWidth).toBe(width);
+          expect(geometry.editorLength).toBe(typed.length);
+          expect(geometry.summaryDisplay).toBe("block");
+          expect(geometry.listDisplay).toBe("none");
+          expect(geometry.horizontal).toBe(0);
+          expect(geometry.units).toHaveLength(2);
+          const clock = geometry.units[0];
+          const label = geometry.units[1];
+          if (!clock || !label) throw new Error("the summary did not render a clock and a zone");
+          expect(clock.text).toMatch(/^(Today|Tomorrow), \d{2}:\d{2}$/);
+          expect(label.text).toBe(zone === "UTC" ? "UTC" : "Hong Kong UTC+08:00");
+          expect(clock.width).toBeGreaterThan(0);
+          expect(label.width).toBeGreaterThan(0);
+          const beside = label.left >= clock.right + 4 && label.top < clock.bottom && clock.top < label.bottom;
+          const below = label.top >= clock.bottom - 1;
+          const overlaps = clock.left < label.right && label.left < clock.right && clock.top < label.bottom && label.top < clock.bottom;
+          expect(overlaps).toBe(false);
+          expect(beside || below).toBe(true);
+        }
+      }
+    });
+  });
+}
