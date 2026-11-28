@@ -2,6 +2,7 @@ export type Brand<T, B extends string> = T & { readonly __brand: B };
 
 export type ProfileId = Brand<string, "ProfileId">;
 export type SuggestionId = Brand<string, "SuggestionId">;
+export type ResearchId = Brand<string, "ResearchId">;
 export type HexPubkey = Brand<string, "HexPubkey">;
 export type Npub = Brand<string, "Npub">;
 export type EventId = Brand<string, "EventId">;
@@ -35,6 +36,13 @@ export function profileId(value: string): ProfileId {
 export function suggestionId(value: string): SuggestionId {
   if (!/^sug_[a-z0-9]{2,32}$/.test(value)) {
     throw new InputError("suggestion_id", "expected sug_ followed by a short token");
+  }
+  return brand(value);
+}
+
+export function researchId(value: string): ResearchId {
+  if (!/^res_[a-z0-9]{2,32}$/.test(value)) {
+    throw new InputError("id", "expected res_ followed by a short token");
   }
   return brand(value);
 }
