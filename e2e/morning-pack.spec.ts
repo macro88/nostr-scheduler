@@ -131,5 +131,11 @@ test("shows a morning pack and leaves briefs unqueued", async ({ page }) => {
     "Relay fees",
     "Zaps",
   ]);
+  const cleanup = new DatabaseSync(`${dataDir}/research.sqlite`, { timeout: 5000 });
+  try {
+    cleanup.exec("DELETE FROM research_records");
+  } finally {
+    cleanup.close();
+  }
   await relay.stop();
 });
