@@ -90,7 +90,13 @@ test("a saved draft shows on the week and keeps a new time", async ({ page }) =>
   await page.getByTestId("time-hour").fill(String(moved.getHours()));
   await page.getByTestId("time-minute").fill(String(moved.getMinutes()));
   await page.getByTestId("time-apply").click();
+  await expect(page.getByTestId("time-picker")).toHaveCount(0);
+  await expect(page.getByTestId("reschedule")).toContainText("11:50");
+  const movedResponse = page.waitForResponse(
+    (response) => response.url().includes("/reschedule") && response.request().method() === "POST" && response.ok(),
+  );
   await page.getByTestId("save-time").click();
+  await movedResponse;
   await expect(draftCard).toContainText("11:50");
 
   await page.reload();
