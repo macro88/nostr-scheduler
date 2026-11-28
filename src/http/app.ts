@@ -18,6 +18,7 @@ import { setProfileSigner } from "../profiles/save.ts";
 import { publishDue } from "../publisher/publish.ts";
 import { hourHintText } from "../research/hints.ts";
 import { scanPerformance } from "../research/performance.ts";
+import { lookupProfile, lookupSubject } from "../research/profile-lookup.ts";
 import { ResearchStore } from "../research/store.ts";
 import { publishToRelay } from "../test-relay/client.ts";
 import type { Profile, UnixSeconds } from "../domain/types.ts";
@@ -174,6 +175,20 @@ export function createApp(options: AppOptions) {
         preferredHours: cadence ? cadence.preferredHours : null,
       }),
     });
+  });
+  app.get("/api/profile-lookup", async (c) => {
+    const profileId = c.req.query("profileId");
+    const rawNpub = c.req.query("npub");
+    if (!profileId) throw new InputError("profileId", "Choose a profile.");
+    const owner = profile(profileId);
+    const subject = lookupSubject(rawNpub ?? "");
+    const report = await lookupProfile({
+      npub: subject.npub,
+      pubkey: subject.pubkey,
+      relays: owner.relays.configured,
+      now: now(),
+    });
+    return c.json(report);
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());
