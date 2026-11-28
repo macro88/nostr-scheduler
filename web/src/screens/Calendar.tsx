@@ -80,7 +80,8 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
   const nowFraction = (now.getHours() + now.getMinutes() / 60 - openHour) / span;
 
   const reschedule = useMutation({
-    mutationFn: () => api(`/api/items/${selected?.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: when }) }),
+    mutationFn: (args: { id: string; fireAt: number }) =>
+      api(`/api/items/${args.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: args.fireAt }) }),
     onSuccess: () => {
       setSelected(null);
       void queryClient.invalidateQueries({ queryKey: ["items", profileId] });
@@ -404,7 +405,16 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
           {canMove ? (
             <div className="actions">
               <WhenField value={when} onChange={setWhen} testId="reschedule" />
-              <Button type="button" variant="outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="save-time"
+                disabled={!selected || reschedule.isPending}
+                onClick={() => {
+                  if (!selected) return;
+                  reschedule.mutate({ id: selected.id, fireAt: when });
+                }}
+              >
                 Move time
               </Button>
               {selected?.status === "approved" ? (
