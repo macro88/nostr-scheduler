@@ -59,11 +59,11 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
   }, [confirming]);
   const surface = usePendingSurface(items.isPending && !items.data);
   const visible = (items.data ?? []).filter(
-    (item) => !hidden.includes(item.id) && ["suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
+    (item) => !hidden.includes(item.id) && ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status),
   );
   const days = mode === "week" ? Array.from({ length: 7 }, (_, index) => new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + index)) : [cursor];
   const canDiscard = selected?.status === "queued" || selected?.status === "signed";
-  const canMove = selected?.status === "approved";
+  const canMove = selected?.status === "draft" || selected?.status === "approved";
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -402,9 +402,11 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
               <Button type="button" variant="outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
                 Move time
               </Button>
-              <Button type="button" variant="ghost" data-testid="remove-draft" onClick={() => undoDiscard(selected)}>
-                Remove
-              </Button>
+              {selected?.status === "approved" ? (
+                <Button type="button" variant="ghost" data-testid="remove-draft" onClick={() => undoDiscard(selected)}>
+                  Remove
+                </Button>
+              ) : null}
             </div>
           ) : null}
           {reschedule.error || discard.error ? <InlineError error={reschedule.error ?? discard.error} /> : null}
