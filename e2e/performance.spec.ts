@@ -121,6 +121,7 @@ test("shows the operator's own notes with multipliers and bands", async ({ page 
       "nav-outliers",
       "nav-research",
       "nav-performance",
+      "nav-lookup",
     ]);
     await page.getByTestId("nav-performance").click();
     await expect(page.getByRole("heading", { name: "Performance" })).toBeVisible();

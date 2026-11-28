@@ -10,6 +10,7 @@ import { Inbox } from "./screens/Inbox";
 import { Remix } from "./screens/Remix";
 import { Log } from "./screens/Log";
 import { Outliers } from "./screens/Outliers";
+import { Lookup } from "./screens/Lookup";
 import { Performance } from "./screens/Performance";
 import { FirstRun } from "./screens/FirstRun";
 import { ProfileSettings } from "./screens/ProfileSettings";
@@ -17,7 +18,7 @@ import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
 import { Toaster } from "./toasts";
 
-const views = ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research", "performance"] as const;
+const views = ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research", "performance", "lookup"] as const;
 type View = (typeof views)[number];
 
 export function App() {
@@ -46,6 +47,7 @@ export function App() {
     outliers: "Outliers",
     research: "Research",
     performance: "Performance",
+    lookup: "Lookup",
   };
 
   useEffect(() => {
@@ -305,6 +307,7 @@ export function App() {
         {selected && !manage && !repair && view === "log" ? <Log /> : null}
         {selected && !manage && !repair && view === "outliers" ? <Outliers profileId={selected.id} /> : null}
         {selected && !manage && !repair && view === "performance" ? <Performance profileId={selected.id} /> : null}
+        {selected && !manage && !repair && view === "lookup" ? <Lookup profileId={selected.id} /> : null}
         {selected && !manage && !repair && view === "sign" ? <Sign profile={selected} /> : null}
       </main>
     </>

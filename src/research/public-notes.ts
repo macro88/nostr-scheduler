@@ -60,6 +60,14 @@ async function readPublicEvents(
   return merged;
 }
 
+function byNewest(left: RawEvent, right: RawEvent): number {
+  return right.created_at - left.created_at || (left.id < right.id ? -1 : 1);
+}
+
+function newest(events: Iterable<RawEvent>, accept: (event: RawEvent) => boolean, limit: number): RawEvent[] {
+  return [...events].filter(accept).sort(byNewest).slice(0, limit);
+}
+
 export async function loadAuthorNotes(
   author: HexPubkey,
   relays: readonly RelayUrl[],
@@ -67,10 +75,23 @@ export async function loadAuthorNotes(
   limit: number,
 ): Promise<RawEvent[]> {
   const merged = await readPublicEvents(relays, { kinds: [1], authors: [author], limit }, queries);
-  return [...merged.values()]
-    .filter((event) => event.kind === 1 && event.pubkey === author && event.content.trim().length > 0)
-    .sort((left, right) => right.created_at - left.created_at || (left.id < right.id ? -1 : 1))
-    .slice(0, limit);
+  return newest(
+    merged.values(),
+    (event) => event.kind === 1 && event.pubkey === author && event.content.trim().length > 0,
+    limit,
+  );
+}
+
+export async function loadAuthorEvents(
+  author: HexPubkey,
+  relays: readonly RelayUrl[],
+  queries: RelayQueries,
+  kinds: readonly number[],
+  limit: number,
+): Promise<RawEvent[]> {
+  const allowed = new Set(kinds);
+  const merged = await readPublicEvents(relays, { kinds: [...allowed], authors: [author], limit }, queries);
+  return newest(merged.values(), (event) => allowed.has(event.kind) && event.pubkey === author, limit);
 }
 
 export async function loadSignalTallies(
