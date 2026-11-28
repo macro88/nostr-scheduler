@@ -1894,3 +1894,93 @@ html[data-fit="stack"] .q-row time { grid-column: 1 / -1; }
   }
   .button:active:not(:disabled) { transform: none; }
 }
+
+.compose-stage {
+  container: compose-stage / inline-size;
+  width: 100%;
+  min-width: 0;
+}
+.compose-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.compose-fields {
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+}
+.compose-preview {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 18px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-field);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.compose-preview[hidden] { display: none; }
+.compose-preview-line {
+  margin: 0;
+  min-height: 1.55em;
+  font-family: var(--font-body);
+  font-size: 22px;
+  line-height: 1.55;
+  font-weight: 400;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.compose-preview-line + .compose-preview-line {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+/* Row when the column fits a 720px editor, a 16px gap, and a 144px preview. */
+@container compose-stage (inline-size >= 880px) {
+  .compose-pair {
+    flex-direction: row;
+    gap: 16px;
+  }
+  .compose-fields {
+    flex: 0 0 720px;
+    width: 720px;
+    max-width: 720px;
+  }
+  .compose-preview {
+    flex: 1 1 0;
+    width: auto;
+    height: 320px;
+    max-width: none;
+    max-height: 320px;
+    align-self: start;
+  }
+}
+html[data-fit="stack"] .compose-pair { flex-direction: column; }
+html[data-fit="stack"] .compose-fields {
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: 720px;
+}
+html[data-fit="stack"] .compose-preview {
+  flex: 0 1 auto;
+  width: 100%;
+  height: auto;
+  max-width: 720px;
+  max-height: 148px;
+}
+@media (min-width: 1041px) {
+  .split:has(.compose-preview:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .split:has(.compose-preview:not([hidden])) .write-pane { max-width: none; }
+}
+@media (max-width: 1040px) {
+  .compose-preview { height: auto; max-height: 148px; }
+  .compose-preview-line { font-size: 20px; }
+}

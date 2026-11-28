@@ -4,7 +4,6 @@ export type PreviewSource =
   | { kind: "reply"; reply: string };
 
 export type PreviewProjection = {
-  title?: string;
   lines: string[];
 };
 

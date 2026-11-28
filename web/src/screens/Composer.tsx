@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
 import { draftsOf, type DraftRow } from "../drafts";
+import { previewParts } from "../preview";
 import { formatQueueWhen, formatWhen, localZoneLabel, startOfWeek } from "../format";
 import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
@@ -361,6 +362,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
 
   const liveDraft = shownDraft();
   const outcomeShowing = save.isPending || Boolean(formError) || Boolean(unconfirmed && liveDraft && unconfirmed.profileId === profile.id && sameSnapshot(unconfirmed.draft, liveDraft));
+  const projection = previewParts(kind === "note" ? { kind: "note", note } : kind === "thread" ? { kind: "thread", parts } : { kind: "reply", reply });
 
   return (
     <div className="split">
@@ -376,99 +378,112 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
             </button>
           ))}
         </div>
-        {kind === "note" ? (
-          <textarea
-            id="compose-note"
-            ref={editor}
-            className="editor note-lg literata-reading"
-            data-testid="note-text"
-            aria-labelledby={headingId ?? "compose-heading"}
-            aria-invalid={blocked || undefined}
-            aria-describedby={blocked ? "private-key-alert" : undefined}
-            placeholder="Write a note"
-            value={note}
-            onChange={(event) => {
-              revision.current += 1;
-              setNote(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (blocked) return;
-              if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
-            }}
-            />
-        ) : null}
-        {kind === "thread" ? (
-          <div data-testid="thread-editor">
-            {parts.map((part, index) => (
-              <textarea
-                key={index}
-                ref={index === 0 ? editor : undefined}
-                className="editor note-lg literata-reading"
-                data-testid="thread-part"
-                aria-label={index === 0 ? "Root post" : "Reply"}
-                aria-invalid={blocked || undefined}
-                aria-describedby={blocked ? "private-key-alert" : undefined}
-                placeholder={index === 0 ? "Root post" : "Reply"}
-                value={part}
-                onChange={(event) => {
-                  revision.current += 1;
-                  setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)));
-                }}
-                onKeyDown={(event) => {
-                  if (blocked) return;
-                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
-                }}
-              />
-            ))}
-            <Button type="button" variant="outline" size="sm" data-testid="add-part" onClick={() => setParts([...parts, ""])}>
-              Add post
-            </Button>
+        <div className="compose-stage">
+          <div className="compose-pair">
+            <div className="compose-fields">
+              {kind === "note" ? (
+                <textarea
+                  id="compose-note"
+                  ref={editor}
+                  className="editor note-lg literata-reading"
+                  data-testid="note-text"
+                  aria-labelledby={headingId ?? "compose-heading"}
+                  aria-invalid={blocked || undefined}
+                  aria-describedby={blocked ? "private-key-alert" : undefined}
+                  placeholder="Write a note"
+                  value={note}
+                  onChange={(event) => {
+                    revision.current += 1;
+                    setNote(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (blocked) return;
+                    if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
+                  }}
+                  />
+              ) : null}
+              {kind === "thread" ? (
+                <div data-testid="thread-editor">
+                  {parts.map((part, index) => (
+                    <textarea
+                      key={index}
+                      ref={index === 0 ? editor : undefined}
+                      className="editor note-lg literata-reading"
+                      data-testid="thread-part"
+                      aria-label={index === 0 ? "Root post" : "Reply"}
+                      aria-invalid={blocked || undefined}
+                      aria-describedby={blocked ? "private-key-alert" : undefined}
+                      placeholder={index === 0 ? "Root post" : "Reply"}
+                      value={part}
+                      onChange={(event) => {
+                        revision.current += 1;
+                        setParts(parts.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)));
+                      }}
+                      onKeyDown={(event) => {
+                        if (blocked) return;
+                        if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
+                      }}
+                    />
+                  ))}
+                  <Button type="button" variant="outline" size="sm" data-testid="add-part" onClick={() => setParts([...parts, ""])}>
+                    Add post
+                  </Button>
+                </div>
+              ) : null}
+              {kind === "reply" ? (
+                <div>
+                  <Input label="Note id or nevent" data-testid="note-ref" placeholder="Note id or nevent" value={ref} onChange={(event) => { setReplyCarry(null); setRef(event.target.value); }} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="load-context"
+                    onClick={() => {
+                      void api<{ context: string }>("/api/context", { method: "POST", body: JSON.stringify({ profileId: profile.id, ref }) }).then((body) => setContext(body.context));
+                    }}
+                  >
+                    Load thread
+                  </Button>
+                  {context ? (
+                    <pre data-testid="thread-context" className="note-md">
+                      {context}
+                    </pre>
+                  ) : null}
+                  <textarea
+                    ref={editor}
+                    className="editor note-lg literata-reading"
+                    data-testid="reply-text"
+                    aria-label="Your reply"
+                    aria-invalid={blocked || undefined}
+                    aria-describedby={blocked ? "private-key-alert" : undefined}
+                    placeholder="Your reply"
+                    value={reply}
+                    onChange={(event) => {
+                      revision.current += 1;
+                      setReply(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (blocked) return;
+                      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
+                    }}
+                  />
+                </div>
+              ) : null}
+              {blocked ? (
+                <div id="private-key-alert" role="alert" data-testid="private-key-alert" className="error">
+                  <p>{pasteWarning}</p>
+                </div>
+              ) : null}
+            </div>
+            <aside className="compose-preview" data-testid="compose-preview" aria-label="Preview" hidden={projection.lines.length === 0}>
+              {projection.lines.map((line, index) => (
+                <p key={index} className="compose-preview-line" data-testid="preview-line">
+                  {line}
+                </p>
+              ))}
+            </aside>
           </div>
-        ) : null}
-        {kind === "reply" ? (
-          <div>
-            <Input label="Note id or nevent" data-testid="note-ref" placeholder="Note id or nevent" value={ref} onChange={(event) => { setReplyCarry(null); setRef(event.target.value); }} />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="load-context"
-              onClick={() => {
-                void api<{ context: string }>("/api/context", { method: "POST", body: JSON.stringify({ profileId: profile.id, ref }) }).then((body) => setContext(body.context));
-              }}
-            >
-              Load thread
-            </Button>
-            {context ? (
-              <pre data-testid="thread-context" className="note-md">
-                {context}
-              </pre>
-            ) : null}
-            <textarea
-              ref={editor}
-              className="editor note-lg literata-reading"
-              data-testid="reply-text"
-              aria-label="Your reply"
-              aria-invalid={blocked || undefined}
-              aria-describedby={blocked ? "private-key-alert" : undefined}
-              placeholder="Your reply"
-              value={reply}
-              onChange={(event) => {
-                revision.current += 1;
-                setReply(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (blocked) return;
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && profile.criteriaState !== "invalid") save.mutate();
-              }}
-            />
-          </div>
-        ) : null}
-        {blocked ? (
-          <div id="private-key-alert" role="alert" data-testid="private-key-alert" className="error">
-            <p>{pasteWarning}</p>
-          </div>
-        ) : null}
+        </div>
         <div className="composer-foot">
           <div className="composer-meta" role="group" aria-label="When and length">
             <span className="meta-pair">
