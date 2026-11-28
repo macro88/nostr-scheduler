@@ -19,6 +19,7 @@
     "demo:local": "NOSTR_SCHEDULER_MODE=demo node src/demo/local.ts",
     "relay:local": "node src/test-relay/stand.ts",
     "criteria:validate": "node src/cli/main.ts criteria validate",
+    "research:scan": "node src/cli/main.ts research scan",
     "start": "node src/cli/main.ts",
     "ui": "vite build --config web/vite.config.ts && node src/http/serve.ts",
     "test:e2e": "playwright test"

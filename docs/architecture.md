@@ -62,6 +62,10 @@ Threads go out root first. A later event still waits for its own `created_at`.
 
 Outliers, briefs, and source posts are research records. `src/research/store.ts` stores them in `data/research.sqlite`. `GET /api/research` lists the records. A `profileId` query limits the list to one profile. `/api/items` reads `data/app.sqlite` only. No MCP tool reads or writes research records. Signing and publishing do not read `data/research.sqlite`.
 
+`data/watch/<profile-id>.txt` lists curated public npubs, one per line. Blank lines and lines that start with `#` are ignored. `node src/cli/main.ts research scan [profile]` reads that file and the profile's configured relays. It does not approve or sign.
+
+The scan keeps up to 50 kind-1 notes per npub and drops a note whose content is blank. Engagement is the number of public replies (kind 1), reposts (kind 6), reactions (kind 7), and zap receipts (kind 9735) that tag the note. Each kind counts once, with equal weight. `scoreOutlier` divides that count by the mean engagement of the author's other notes in the window. When that mean is 0, the multiplier is the post's own count. The scan stores an `OutlierHit` when the multiplier is at least 2. A later scan replaces that profile's outlier hits and leaves briefs and source posts in place. A missing watch file changes nothing. No configured relay changes nothing. A relay that does not answer leaves the stored hits unchanged.
+
 ## MCP
 
 The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`, `suggest_post`, and `list_queue`. A test fails if that list changes or if a tool name contains `sign` or `publish`. `suggest_post` writes a suggestion. It does not approve, sign, or enqueue. `list_queue` is read-only.
@@ -72,6 +76,7 @@ The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`
 data/profiles.yaml
 data/criteria/<id>.md
 data/criteria/<id>.feedback.yaml
+data/watch/<id>.txt
 data/app.sqlite
 data/research.sqlite
 data/nip46/client.json    # only when file storage was explicitly opted in
