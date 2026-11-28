@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { expect, test, type Page } from "@playwright/test";
 import { npubFromPubkey } from "../src/domain/bech32.ts";
 import { createMockSigner, startMockBunker } from "../src/mock-signer/index.ts";
@@ -31,6 +32,17 @@ function profileFile(signer: { npub: string; pubkey: string }, relay: string) {
   );
 }
 
+function clearResearch() {
+  const path = `${dataDir}/research.sqlite`;
+  if (!existsSync(path)) return;
+  const db = new DatabaseSync(path, { timeout: 5000 });
+  try {
+    db.exec("DELETE FROM research_records");
+  } finally {
+    db.close();
+  }
+}
+
 async function post(page: Page, path: string, payload: unknown) {
   return page.evaluate(
     async ({ path, payload }) => {
@@ -55,6 +67,7 @@ test("reviews, composes, signs, and publishes on the local relay", async ({ page
   const url = await relay.start();
   const signer = createMockSigner(mode);
   profileFile(signer, url);
+  clearResearch();
   const when = new Date(Date.now() + 75 * 1000);
   when.setSeconds(0, 0);
   const fireAt = Math.floor(when.getTime() / 1000);

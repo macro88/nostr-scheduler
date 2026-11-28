@@ -187,6 +187,7 @@ test("empty, loading, and error states", async ({ page }) => {
   const url = await relay.start();
   profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
   let itemsMode: "empty" | "slow" | "error" = "empty";
+  await page.route("**/api/research**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/api/items**", async (route) => {
     const mode = itemsMode;
     if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 700));

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Button, EmptyState, Input } from "@macro88/ui";
+import { groupSuggestions, selectBriefs, type BriefView } from "../../../src/domain/pack.js";
 import { api, type Item, type Profile } from "../api";
 import { plainError } from "../errors";
 import { formatWhen } from "../format";
@@ -16,8 +17,26 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
   });
+  const research = useQuery({
+    queryKey: ["research", profile.id],
+    queryFn: () => api<unknown>(`/api/research?profileId=${profile.id}`),
+  });
   const [hidden, setHidden] = useState<string[]>([]);
-  const suggestions = (items.data ?? []).filter((item) => item.status === "suggestion" && !hidden.includes(item.id));
+  const waiting = (items.data ?? []).filter((item) => item.status === "suggestion" && !hidden.includes(item.id));
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const groups = groupSuggestions(
+    waiting.map((item) => ({
+      ...item,
+      createdAt: item.createdAt ?? item.fireAt[0] ?? 0,
+      rationale: item.rationale ?? "",
+    })),
+    { timeZone: zone },
+  );
+  const suggestions = groups.flatMap((group) => group.items);
+  const briefs = selectBriefs(research.data);
+  const briefPending = research.isPending && research.data === undefined;
+  const showEmpty = suggestions.length === 0 && briefs.length === 0 && !briefPending;
+  const packIndex = groups.findIndex((group) => group.label === "Morning pack");
   const [index, setIndex] = useState(0);
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -183,9 +202,10 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
       <LoadingBlock pending={surface.loading} label="Loading suggestions" />
       {items.isError ? <InlineError error={items.error} fallback="The suggestions could not be loaded. Try again." /> : null}
       {surface.ready && !items.isError ? (
-        <div className={`desk${suggestions.length === 0 ? " is-empty" : ""}`}>
-          {suggestions.length === 0 ? (
+        <div className={`desk${showEmpty ? " is-empty" : ""}`}>
+          {showEmpty ? (
             <div className="desk-empty inbox-list" data-testid="empty">
+              {research.isError ? <p className="brief-note" data-testid="brief-error">The daily brief could not be loaded.</p> : null}
               <EmptyState
                 title="Nothing is waiting."
                 action={
@@ -196,23 +216,42 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
               />
             </div>
           ) : (
-            <div className="inbox-list" role="listbox" aria-label="Suggestions">
-              {suggestions.map((item, itemIndex) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`inbox-item${itemIndex === index ? " selected" : ""}`}
-                  data-row={item.id}
-                  data-testid="suggestion"
-                  aria-selected={itemIndex === index}
-                  onClick={() => setIndex(itemIndex)}
-                >
-                  <div className="meta">
-                    <span className="status">{kindWord(item.draft?.type)}</span>
-                    <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
-                  </div>
-                  <p className="preview note-md">{item.preview}</p>
-                </button>
+            <div className="inbox-list" aria-label="Suggestions">
+              {briefPending && suggestions.length === 0 ? <p className="brief-note">Loading the daily brief</p> : null}
+              {research.isError ? <p className="brief-note" data-testid="brief-error">The daily brief could not be loaded.</p> : null}
+              {packIndex < 0 ? <BriefSection briefs={briefs} /> : null}
+              {groups.map((group, groupIndex) => (
+                <Fragment key={`${group.by}-${group.key}`}>
+                  <section aria-labelledby={`pack-${group.by}-${group.key}`}>
+                    <h2 id={`pack-${group.by}-${group.key}`} className="inbox-group">
+                      {group.label}
+                    </h2>
+                    <div role="listbox" aria-label={group.label}>
+                      {group.items.map((item) => {
+                        const itemIndex = suggestions.findIndex((entry) => entry.id === item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="option"
+                            className={`inbox-item${itemIndex === index ? " selected" : ""}`}
+                            data-row={item.id}
+                            data-testid="suggestion"
+                            aria-selected={itemIndex === index}
+                            onClick={() => setIndex(itemIndex)}
+                          >
+                            <div className="meta">
+                              <span className="status">{kindWord(item.draft?.type)}</span>
+                              <time>{item.fireAt[0] ? formatWhen(item.fireAt[0]) : ""}</time>
+                            </div>
+                            <p className="preview note-md">{item.preview}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                  {groupIndex === packIndex ? <BriefSection briefs={briefs} /> : null}
+                </Fragment>
               ))}
             </div>
           )}
@@ -281,5 +320,32 @@ export function Inbox({ profile, shortcuts, onCompose }: { profile: Profile; sho
         </div>
       ) : null}
     </>
+  );
+}
+
+function linkHost(url: string): string {
+  return new URL(url).host;
+}
+
+function BriefSection({ briefs }: { briefs: readonly BriefView[] }) {
+  if (briefs.length === 0) return null;
+  return (
+    <section aria-labelledby="daily-brief" data-testid="daily-brief">
+      <h2 id="daily-brief" className="inbox-group">
+        Daily brief
+      </h2>
+      <p className="brief-note">Research only. Remix a brief before it can be approved.</p>
+      {briefs.map((brief) => (
+        <article key={brief.id} className="brief-item" data-testid="brief">
+          <h3>{brief.title}</h3>
+          <p>{brief.summary}</p>
+          {brief.url ? (
+            <a href={brief.url} target="_blank" rel="noreferrer">
+              {linkHost(brief.url)}
+            </a>
+          ) : null}
+        </article>
+      ))}
+    </section>
   );
 }
