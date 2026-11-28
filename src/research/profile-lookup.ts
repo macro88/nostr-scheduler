@@ -213,7 +213,7 @@ function median(values: readonly number[]): number | null {
 }
 
 export function profilePatterns(posts: readonly LookupPost[]): ProfilePatterns {
-  const mix: PostTypeMix = { note: 0, reply: 0, quote: 0, repost: 0 };
+  const mix = { note: 0, reply: 0, quote: 0, repost: 0 };
   const times: number[] = [];
   for (const post of posts) {
     mix[post.type] += 1;
