@@ -64,6 +64,11 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
   const days = mode === "week" ? Array.from({ length: 7 }, (_, index) => new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + index)) : [cursor];
   const canDiscard = selected?.status === "queued" || selected?.status === "signed";
   const canMove = selected?.status === "draft" || selected?.status === "approved";
+  const pickItem = (item: Item) => {
+    setSelected(item);
+    const at = item.fireAt[0];
+    if (typeof at === "number") setWhen(at);
+  };
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -75,7 +80,8 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
   const nowFraction = (now.getHours() + now.getMinutes() / 60 - openHour) / span;
 
   const reschedule = useMutation({
-    mutationFn: () => api(`/api/items/${selected?.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: when }) }),
+    mutationFn: (args: { id: string; fireAt: number }) =>
+      api(`/api/items/${args.id}/reschedule`, { method: "POST", body: JSON.stringify({ fireAt: args.fireAt }) }),
     onSuccess: () => {
       setSelected(null);
       void queryClient.invalidateQueries({ queryKey: ["items", profileId] });
@@ -288,7 +294,7 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
                     const fraction = (date.getHours() + date.getMinutes() / 60 - openHour) / span;
                     const top = `${Math.min(Math.max(fraction, 0), 0.92) * 100}%`;
                     if (group.length === 1) {
-                      return <WeekCard key={first.id} item={first} top={top} onSelect={() => setSelected(first)} />;
+                      return <WeekCard key={first.id} item={first} top={top} onSelect={() => pickItem(first)} />;
                     }
                     return (
                       <div key={first.id} className="wevt-stack" style={{ top }} data-testid="week-stack">
@@ -313,7 +319,7 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
               <section key={day.toISOString()} aria-label={`${crowded.length} notes on ${label}`}>
                 <h2>{crowded.length} notes, {label}</h2>
                 {crowded.map((item) => (
-                  <button key={item.id} type="button" className="overflow-row" data-testid="calendar-item" onClick={() => setSelected(item)}>
+                  <button key={item.id} type="button" className="overflow-row" data-testid="calendar-item" onClick={() => pickItem(item)}>
                     <time dateTime={new Date((item.fireAt[0] ?? 0) * 1000).toISOString()}>{formatClock(item.fireAt[0] ?? 0)}</time>
                     <p>{item.preview}</p>
                     <StatusMark status={item.status} />
@@ -363,7 +369,7 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
                           className="slot-item"
                           data-testid="calendar-item"
                           style={{ marginTop }}
-                          onClick={() => setSelected(item)}
+                          onClick={() => pickItem(item)}
                         >
                           <time>{formatClock(item.fireAt[0] ?? 0)}</time>
                           <p className="note-md">{item.preview}</p>
@@ -399,7 +405,16 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
           {canMove ? (
             <div className="actions">
               <WhenField value={when} onChange={setWhen} testId="reschedule" />
-              <Button type="button" variant="outline" data-testid="save-time" onClick={() => reschedule.mutate()}>
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="save-time"
+                disabled={!selected || reschedule.isPending}
+                onClick={() => {
+                  if (!selected) return;
+                  reschedule.mutate({ id: selected.id, fireAt: when });
+                }}
+              >
                 Move time
               </Button>
               {selected?.status === "approved" ? (

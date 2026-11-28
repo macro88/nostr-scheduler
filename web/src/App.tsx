@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Profile } from "./api";
 import { readShortcutsEnabled, singleKeyActive, writeShortcutsEnabled } from "./keys";
 import { shortNpub } from "./npub";
+import { Board } from "./screens/Board";
 import { Calendar } from "./screens/Calendar";
 import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
@@ -14,7 +15,7 @@ import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
 import { Toaster } from "./toasts";
 
-const views = ["inbox", "compose", "calendar", "log", "sign", "outliers"] as const;
+const views = ["inbox", "compose", "board", "calendar", "log", "sign", "outliers"] as const;
 type View = (typeof views)[number];
 
 export function App() {
@@ -36,6 +37,7 @@ export function App() {
   const sections: Record<View, string> = {
     inbox: "Inbox",
     compose: "Compose",
+    board: "Board",
     calendar: "Queue",
     log: "Log",
     sign: "Sign",
@@ -83,12 +85,8 @@ export function App() {
     const onKey = (event: KeyboardEvent) => {
       if (menuOpen) return;
       if (!singleKeyActive(shortcuts, event.target)) return;
-      if (event.key === "1") setView("inbox");
-      if (event.key === "2") setView("compose");
-      if (event.key === "3") setView("calendar");
-      if (event.key === "4") setView("log");
-      if (event.key === "5") setView("sign");
-      if (event.key === "6") setView("outliers");
+      const choice = views[Number(event.key) - 1];
+      if (choice) setView(choice);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -292,6 +290,7 @@ export function App() {
             <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} onViewQueue={() => setView("calendar")} />
           </div>
         ) : null}
+        {selected && !manage && !repair && view === "board" ? <Board profile={selected} /> : null}
         {selected && !manage && !repair && view === "calendar" ? (
           <Calendar profileId={selected.id} canSend={(selected.relays ?? []).some((item) => item.publish)} />
         ) : null}

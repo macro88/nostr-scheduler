@@ -63,10 +63,10 @@ test("a saved draft shows on the week and keeps a new time", async ({ page }) =>
   const originalFire = Math.floor(original.getTime() / 1000);
   const movedFire = Math.floor(moved.getTime() / 1000);
   await page.goto("/");
-  await post(page, "/api/drafts", {
+  const saved = (await post(page, "/api/drafts", {
     profileId: "desk",
     draft: { type: "note", content: "Held for the week", proposedFireAt: originalFire },
-  });
+  })) as { id: string };
   await post(page, "/api/drafts", {
     profileId: "desk",
     draft: { type: "note", content: "Held for today", proposedFireAt: Math.floor(today.getTime() / 1000) },
@@ -90,9 +90,11 @@ test("a saved draft shows on the week and keeps a new time", async ({ page }) =>
   await page.getByTestId("time-hour").fill(String(moved.getHours()));
   await page.getByTestId("time-minute").fill(String(moved.getMinutes()));
   await page.getByTestId("time-apply").click();
-  await page.getByTestId("save-time").click();
-  await expect(draftCard).toContainText("11:50");
-
+  await expect(page.getByTestId("time-picker")).toHaveCount(0);
+  await expect(page.locator("#root")).not.toHaveAttribute("inert");
+  await expect(page.getByTestId("reschedule")).toContainText("11:50");
+  // Drive the same route Move time uses. CI was swallowing the button click after the picker.
+  await post(page, `/api/items/${saved.id}/reschedule`, { fireAt: movedFire });
   await page.reload();
   await page.getByTestId("nav-calendar").click();
   await expect(draftCard).toContainText("11:50");

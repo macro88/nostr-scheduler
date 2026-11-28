@@ -65,6 +65,7 @@ export function WhenField({
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
+        document.getElementById("root")?.removeAttribute("inert");
         setOpen(false);
         return;
       }
@@ -89,6 +90,11 @@ export function WhenField({
     };
   }, [open]);
 
+  const close = () => {
+    document.getElementById("root")?.removeAttribute("inert");
+    setOpen(false);
+  };
+
   const apply = () => {
     const next = new Date(value * 1000);
     const year = Number(parts.year);
@@ -100,7 +106,7 @@ export function WhenField({
     next.setFullYear(year, month - 1, day);
     next.setHours(hour, minute, 0, 0);
     onChange(Math.floor(next.getTime() / 1000));
-    setOpen(false);
+    close();
   };
 
   const field = (name: keyof Parts, label: string, test: string) => (
@@ -128,8 +134,12 @@ export function WhenField({
         aria-haspopup="dialog"
         onClick={() => {
           setOpen((current) => {
-            if (!current) setParts(partsFrom(value));
-            return !current;
+            if (current) {
+              document.getElementById("root")?.removeAttribute("inert");
+              return false;
+            }
+            setParts(partsFrom(value));
+            return true;
           });
         }}
       >
