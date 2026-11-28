@@ -10,6 +10,7 @@ import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-ke
 import { InlineError } from "../states";
 import { notifySuccess } from "../toasts";
 import { flyScheduleChip } from "../theme/motion";
+import { useHourHint } from "../hour-hint";
 import { WhenField } from "../WhenField";
 
 type Kind = "note" | "thread" | "reply";
@@ -113,7 +114,7 @@ function idAlreadyUsed(error: unknown): boolean {
 const repairCopy = "This note has not been scheduled. Repair this profile’s local setup to continue. Your text and chosen time stay here.";
 const keepCopy = "Unsaved text is lost on reload. Save it to keep it in Queue.";
 
-export function Composer({ profile, onRepair, onViewQueue, headingId }: { profile: Profile; onRepair?: () => void; onViewQueue?: () => void; headingId?: string }) {
+export function Composer({ profile, onRepair, onViewQueue, headingId, active = true }: { profile: Profile; onRepair?: () => void; onViewQueue?: () => void; headingId?: string; active?: boolean }) {
   const queryClient = useQueryClient();
   const editor = useRef<HTMLTextAreaElement>(null);
   const [kind, setKind] = useState<Kind>("note");
@@ -150,6 +151,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
   });
+  const hint = useHourHint(profile.id, active);
   if (queue.isSuccess && !draftsMarked.current) {
     draftsMarked.current = true;
     performance.mark("drafts-data-ready");
@@ -488,7 +490,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
           <div className="composer-meta" role="group" aria-label="When and length">
             <span className="meta-pair">
               <span className="meta-name">When</span>
-              <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} />
+              <WhenField value={when} onChange={(next) => { revision.current += 1; setWhen(next); }} invalid={Boolean(formError)} hint={hint} />
             </span>
             <span className="meta-pair">
               <span className="meta-name">Count</span>

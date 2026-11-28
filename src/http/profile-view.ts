@@ -1,10 +1,21 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { relative, sep } from "node:path";
+import { parseCriteria } from "../criteria/parse.ts";
 import { assessCriteria } from "../criteria/readiness.ts";
 import type { Profile } from "../domain/types.ts";
 import { publicSigner } from "../profiles/load.ts";
 
 export type CriteriaState = "absent" | "ready" | "invalid";
+
+export function cadenceOf(profile: Pick<Profile, "id" | "criteriaPath">): { timezone: string; preferredHours: readonly number[] } | null {
+  if (!profile.criteriaPath || !existsSync(profile.criteriaPath)) return null;
+  try {
+    const cadence = parseCriteria(readFileSync(profile.criteriaPath, "utf8"), profile.id).cadence;
+    return { timezone: cadence.timezone, preferredHours: cadence.preferredHours };
+  } catch {
+    return null;
+  }
+}
 
 export function criteriaStateOf(profile: Profile, dataDir: string): CriteriaState {
   if (!profile.criteriaPath) return "absent";

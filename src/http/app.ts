@@ -16,6 +16,7 @@ import { loadProfiles } from "../profiles/load.ts";
 import { publicSigner } from "../profiles/load.ts";
 import { setProfileSigner } from "../profiles/save.ts";
 import { publishDue } from "../publisher/publish.ts";
+import { hourHintText } from "../research/hints.ts";
 import { scanPerformance } from "../research/performance.ts";
 import { ResearchStore } from "../research/store.ts";
 import { publishToRelay } from "../test-relay/client.ts";
@@ -46,7 +47,7 @@ import {
   suggestionSchema,
 } from "./schema.ts";
 import { mountProfileRoutes } from "./profile-routes.ts";
-import { profileJson } from "./profile-view.ts";
+import { cadenceOf, profileJson } from "./profile-view.ts";
 import { createGuard, issueSession } from "./security.ts";
 
 type Listener = (data: string) => void;
@@ -164,7 +165,15 @@ export function createApp(options: AppOptions) {
       relays: owner.relays.configured,
       now: now(),
     });
-    return c.json(report);
+    const cadence = cadenceOf(owner);
+    return c.json({
+      ...report,
+      hint: hourHintText({
+        notes: report.notes,
+        timezone: cadence?.timezone ?? "UTC",
+        preferredHours: cadence ? cadence.preferredHours : null,
+      }),
+    });
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());

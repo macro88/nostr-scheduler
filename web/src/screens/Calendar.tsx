@@ -9,6 +9,7 @@ import { usePendingSurface } from "../pending";
 import { StatusMark } from "../status";
 import { InlineError, LoadingBlock } from "../states";
 import { notifyError, notifySuccess, notifyUndo } from "../toasts";
+import { useHourHint } from "../hour-hint";
 import { WhenField } from "../WhenField";
 
 const weekOpen = 7;
@@ -36,6 +37,7 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
     queryKey: ["items", profileId],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profileId}`),
   });
+  const hint = useHourHint(profileId);
   const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
   const [mode, setMode] = useState<"week" | "day">("week");
   const [selected, setSelected] = useState<Item | null>(null);
@@ -392,6 +394,11 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
             <StatusMark status={selected.status} /> {selected.fireAt[0] ? formatQueueWhen(selected.fireAt[0], now) : ""}
           </p>
           <p className="note-md">{selected.preview}</p>
+          {!canMove && hint ? (
+            <p className="hint hour-hint" data-testid="hour-hint">
+              {hint}
+            </p>
+          ) : null}
           {canDiscard ? (
             <div>
               {selected.status === "signed" ? (
@@ -404,7 +411,7 @@ export function Calendar({ profileId, canSend = true }: { profileId: string; can
           ) : null}
           {canMove ? (
             <div className="actions">
-              <WhenField value={when} onChange={setWhen} testId="reschedule" />
+              <WhenField value={when} onChange={setWhen} testId="reschedule" hint={hint} />
               <Button
                 type="button"
                 variant="outline"
