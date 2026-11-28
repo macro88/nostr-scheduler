@@ -7,6 +7,7 @@ import { Board } from "./screens/Board";
 import { Calendar } from "./screens/Calendar";
 import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
+import { Remix } from "./screens/Remix";
 import { Log } from "./screens/Log";
 import { Outliers } from "./screens/Outliers";
 import { FirstRun } from "./screens/FirstRun";
@@ -15,7 +16,7 @@ import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
 import { Toaster } from "./toasts";
 
-const views = ["inbox", "compose", "board", "calendar", "log", "sign", "outliers"] as const;
+const views = ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research"] as const;
 type View = (typeof views)[number];
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
     log: "Log",
     sign: "Sign",
     outliers: "Outliers",
+    research: "Research",
   };
 
   useEffect(() => {
@@ -285,6 +287,9 @@ export function App() {
           />
         ) : null}
         {selected && !manage && !repair && view === "inbox" ? <Inbox profile={selected} shortcuts={shortcuts} onCompose={() => setView("compose")} /> : null}
+        {selected && !manage && !repair && view === "research" ? (
+          <Remix profile={selected} headingId="section-title" onCompose={() => setView("compose")} />
+        ) : null}
         {selected ? (
           <div hidden={repair || manage || view !== "compose"}>
             <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} onViewQueue={() => setView("calendar")} />
