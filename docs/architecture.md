@@ -70,6 +70,8 @@ The Research screen shows one record as read-only source text beside an editor. 
 
 The Performance screen reads the operator's own public notes from configured relays. Engagement is the same public reply, repost, reaction, and zap tally used for outliers. Notes are ranked by multiplier against the operator's other notes in the window. The top and bottom 20% get Do more and Do less labels. The view never approves, signs, or queues.
 
+The Lookup screen reads one pasted npub from those same relays. It shows the public kind 0 name and about, how often that author posts, the mix of notes, replies, quotes, and reposts, and up to five words that appear in at least two notes. `GET /api/profile-lookup` does not write a work item or a research record. It does not follow, message, or draft a post.
+
 ## MCP
 
 The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`, `suggest_post`, and `list_queue`. A test fails if that list changes or if a tool name contains `sign` or `publish`. `suggest_post` writes a suggestion. It does not approve, sign, or enqueue. `list_queue` is read-only.
