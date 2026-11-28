@@ -1401,6 +1401,9 @@ nav { flex-wrap: wrap; }
   border: 0;
 }
 .when-field { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); min-width: 0; }
+.hour-hint { flex: 1 0 100%; max-width: 40rem; margin: 0; white-space: normal; }
+.meta-pair:has(.hour-hint) { flex-basis: 100%; }
+.detail-note .hour-hint { display: block; margin-top: var(--space-8); }
 .time-pop {
   position: fixed;
   z-index: 35;

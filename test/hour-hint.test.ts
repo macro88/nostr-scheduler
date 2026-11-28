@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { InputError, profileId } from "../src/domain/brand.ts";
 import { cadenceOf } from "../src/http/profile-view.ts";
-import { hintHours, hourHintText, hourHintTextFromReport, type EngagementTiming } from "../src/research/hints.ts";
+import { hintHours, hourHintText, type EngagementTiming } from "../src/research/hints.ts";
 
 const utc = (iso: string) => Date.parse(iso) / 1000;
 
@@ -74,16 +74,6 @@ describe("hintHours", () => {
     );
   });
 
-  test("reads the hint from a performance report", () => {
-    const text = hourHintTextFromReport({
-      notes: winner.map((note) => ({ ...note, content: "kept" })),
-      cadence: { timezone: "UTC", preferredHours: [9, 18] },
-    });
-    expect(text).toContain("around 18:00 in UTC");
-    expect(text).toContain("Criteria hours stay 09:00 and 18:00 until you edit them.");
-    expect(hourHintTextFromReport({ notes: [] })).toBeNull();
-    expect(hourHintTextFromReport({ notes: "nope" })).toBeNull();
-  });
 });
 
 describe("cadenceOf", () => {

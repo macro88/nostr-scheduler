@@ -91,36 +91,3 @@ export function hourHintText(input: {
   const kept = input.preferredHours.length === 0 ? "unset" : joinHours(input.preferredHours);
   return `${lead} Criteria hours stay ${kept} until you edit them.`;
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function hourHintTextFromReport(value: unknown): string | null {
-  if (!isRecord(value) || !Array.isArray(value.notes)) return null;
-  const notes: EngagementTiming[] = [];
-  for (const note of value.notes) {
-    if (!isRecord(note) || typeof note.createdAt !== "number" || typeof note.engagement !== "number") return null;
-    notes.push({ createdAt: note.createdAt, engagement: note.engagement });
-  }
-  if (value.cadence === undefined || value.cadence === null) {
-    try {
-      return hourHintText({ notes, timezone: "UTC", preferredHours: null });
-    } catch {
-      return null;
-    }
-  }
-  if (!isRecord(value.cadence) || typeof value.cadence.timezone !== "string" || !Array.isArray(value.cadence.preferredHours)) {
-    return null;
-  }
-  const preferredHours: number[] = [];
-  for (const hour of value.cadence.preferredHours) {
-    if (typeof hour !== "number" || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
-    preferredHours.push(hour);
-  }
-  try {
-    return hourHintText({ notes, timezone: value.cadence.timezone, preferredHours });
-  } catch {
-    return null;
-  }
-}

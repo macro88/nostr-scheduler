@@ -25,11 +25,13 @@ export function WhenField({
   onChange,
   testId = "schedule",
   invalid = false,
+  hint = null,
 }: {
   value: number;
   onChange: (unix: number) => void;
   testId?: string;
   invalid?: boolean;
+  hint?: string | null;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -132,6 +134,7 @@ export function WhenField({
         data-testid={testId}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-describedby={hint ? `${testId}-hour-hint` : undefined}
         onClick={() => {
           setOpen((current) => {
             if (current) {
@@ -151,6 +154,11 @@ export function WhenField({
       </button>
       <span className="meta-name">Zone</span>
       <span className="schedule-zone" data-testid="schedule-zone">{localZoneLabel(value)}</span>
+      {hint ? (
+        <p className="hint hour-hint" id={`${testId}-hour-hint`} data-testid="hour-hint">
+          {hint}
+        </p>
+      ) : null}
       {open
         ? createPortal(
             <div

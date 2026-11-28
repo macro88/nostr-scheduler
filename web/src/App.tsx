@@ -294,7 +294,7 @@ export function App() {
         ) : null}
         {selected ? (
           <div hidden={repair || manage || view !== "compose"}>
-            <Composer profile={selected} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} onViewQueue={() => setView("calendar")} />
+            <Composer profile={selected} active={!repair && !manage && view === "compose"} headingId={!repair && !manage && view === "compose" ? "section-title" : undefined} onRepair={() => setRepair(true)} onViewQueue={() => setView("calendar")} />
           </div>
         ) : null}
         {selected && !manage && !repair && view === "board" ? <Board profile={selected} /> : null}
