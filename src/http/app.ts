@@ -205,7 +205,7 @@ export function createApp(options: AppOptions) {
   app.post("/api/items/:id/reschedule", async (c) => {
     const body = rescheduleSchema.parse(await c.req.json());
     const current = store.get(suggestionId(c.req.param("id")));
-    if (current.status !== "suggestion" && current.status !== "approved") {
+    if (current.status !== "draft" && current.status !== "suggestion" && current.status !== "approved") {
       return c.json(
         { error: "A signed event is frozen. Discard it and sign again to choose a new time." },
         409,

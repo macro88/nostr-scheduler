@@ -89,7 +89,7 @@ export function previewOf(item: WorkItem): string {
 }
 
 export function shiftDraft(item: Extract<WorkItem, { draft: unknown }>, fireAt: number) {
-  if (item.status !== "suggestion" && item.status !== "approved" && item.status !== "rejected") {
+  if (item.status !== "draft" && item.status !== "suggestion" && item.status !== "approved" && item.status !== "rejected") {
     throw new Error("only an unsigned item can move");
   }
   const draft = item.draft;
