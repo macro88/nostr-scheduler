@@ -44,6 +44,7 @@ export type Item = {
   fireAt: number[];
   preview: string;
   rationale?: string;
+  createdAt?: number;
   reason?: string;
   draft?: {
     type: string;

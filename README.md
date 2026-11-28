@@ -210,7 +210,7 @@ If a note's text contains `nsec1` anywhere, in any case, the composer will not q
 
 Start `node src/cli/main.ts mcp` and point a local MCP client at that process over standard input. A suggester can list profiles, read criteria and the decision log, read thread context, submit a suggestion, and inspect the queue. It cannot sign or publish.
 
-`suggest_post` stores a suggestion. The suggester id has to match the one on the profile.
+`suggest_post` stores a suggestion. The suggester id has to match the one on the profile. A rationale can include a tag, such as `#morning`. The inbox puts those suggestions in the morning pack. A suggestion with no tag stays in the inbox and groups by the day it was created. A brief is a research record. The inbox can show it, and it cannot be approved until it is remixed into a suggestion or a draft.
 
 ## Future work
 

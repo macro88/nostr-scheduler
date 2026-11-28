@@ -60,7 +60,7 @@ Threads go out root first. A later event still waits for its own `created_at`.
 
 ## Research
 
-Outliers, briefs, and source posts are research records. `src/research/store.ts` stores them in `data/research.sqlite`. `GET /api/research` lists the records. A `profileId` query limits the list to one profile. `/api/items` reads `data/app.sqlite` only. No MCP tool reads or writes research records. Signing and publishing do not read `data/research.sqlite`.
+Outliers, briefs, and source posts are research records. `src/research/store.ts` stores them in `data/research.sqlite`. `GET /api/research` lists the records. The inbox shows records with kind `brief` and does not approve them. It groups each suggestion by the first `#tag` in its rationale. A suggestion with no tag groups by the day it was created. The morning pack is the `#morning` tag, or today's untagged suggestions when that tag is absent. A `profileId` query limits the list to one profile. `/api/items` reads `data/app.sqlite` only. No MCP tool reads or writes research records. Signing and publishing do not read `data/research.sqlite`.
 
 `data/watch/<profile-id>.txt` lists curated public npubs, one per line. Blank lines and lines that start with `#` are ignored. `node src/cli/main.ts research scan [profile]` reads that file and the profile's configured relays. It does not approve or sign.
 

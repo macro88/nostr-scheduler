@@ -361,6 +361,47 @@ button.check { padding: 0; }
   color: var(--color-text);
 }
 .inbox-item time { color: var(--color-muted); font-size: 13px; line-height: 18px; font-weight: 500; }
+.inbox-group {
+  padding: 14px 18px 2px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-muted);
+}
+.brief-note {
+  padding: 0 18px 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-muted);
+}
+.brief-item {
+  padding: 11px 18px 13px;
+  border-bottom: 1px solid var(--color-border);
+}
+.brief-item h3 {
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--text-body-md--line-height);
+  font-weight: 600;
+}
+.brief-item p {
+  margin-top: 4px;
+  font-family: var(--font-body);
+  font-size: var(--text-body-md);
+  line-height: var(--text-body-md--line-height);
+  overflow-wrap: anywhere;
+}
+.brief-item a {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .inbox-detail {
   display: flex;
   flex-direction: column;
