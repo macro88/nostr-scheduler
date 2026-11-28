@@ -46,7 +46,7 @@ import {
   suggestionSchema,
 } from "./schema.ts";
 import { mountProfileRoutes } from "./profile-routes.ts";
-import { profileJson } from "./profile-view.ts";
+import { cadenceOf, profileJson } from "./profile-view.ts";
 import { createGuard, issueSession } from "./security.ts";
 
 type Listener = (data: string) => void;
@@ -164,7 +164,7 @@ export function createApp(options: AppOptions) {
       relays: owner.relays.configured,
       now: now(),
     });
-    return c.json(report);
+    return c.json({ ...report, cadence: cadenceOf(owner) });
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());
