@@ -68,6 +68,8 @@ The scan keeps up to 50 kind-1 notes per npub and drops a note whose content is 
 
 The Research screen shows one record as read-only source text beside an editor. Save to drafts calls `POST /api/drafts` and stores a manual draft. `POST /api/research/:id/remix` sets `remixedAt` on that row. The first stamp stays if the call runs again. The research row does not become a work item. Schedule the saved draft from Compose, then sign it. Publish still waits until fire time. A later scan still replaces outlier rows, so an outlier's `remixedAt` does not survive that scan. Briefs and source posts keep the stamp.
 
+The Performance screen reads the operator's own public notes from configured relays. Engagement is the same public reply, repost, reaction, and zap tally used for outliers. Notes are ranked by multiplier against the operator's other notes in the window. The top and bottom 20% get Do more and Do less labels. The view never approves, signs, or queues.
+
 ## MCP
 
 The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`, `suggest_post`, and `list_queue`. A test fails if that list changes or if a tool name contains `sign` or `publish`. `suggest_post` writes a suggestion. It does not approve, sign, or enqueue. `list_queue` is read-only.

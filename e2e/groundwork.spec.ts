@@ -471,7 +471,7 @@ test("narrow screens keep navigation and queue controls reachable", async ({ pag
   const url = await relay.start();
   profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
   await page.goto("/");
-  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers"]) await expectInView(page, `nav-${name}`);
+  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research", "performance"]) await expectInView(page, `nav-${name}`);
   await page.getByTestId("nav-calendar").click();
   for (const name of ["prev", "view-week", "view-day", "next", "publish-due"]) await expectInView(page, name);
   await relay.stop();
@@ -691,7 +691,7 @@ test("axe finds no serious or critical issues", async ({ page }) => {
   const url = await relay.start();
   profileFile(createMockSigner({ NOSTR_SCHEDULER_MODE: "test" }), url);
   await page.goto("/");
-  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers"]) {
+  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research", "performance"]) {
     await page.getByTestId(`nav-${name}`).click();
     for (const theme of ["light", "dark"] as const) {
       await setScheme(page, theme);

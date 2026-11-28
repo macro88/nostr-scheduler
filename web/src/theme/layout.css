@@ -1627,6 +1627,7 @@ nav { flex-wrap: wrap; }
   .work-list { flex: 1; min-height: 0; overflow: auto; }
   .sign-off { flex-shrink: 0; background: var(--color-bg); }
   .log-row { grid-template-columns: 1fr; gap: var(--space-4) var(--space-12); }
+  .performance-note { grid-template-columns: 1fr; gap: var(--space-4); }
   .editor {
     flex: 0 0 auto;
     height: 148px;
@@ -2205,3 +2206,26 @@ html[data-board-drag] * {
 }
 html[data-fit="stack"] .remix-body,
 html[data-fit="stack"] .remix-work { grid-template-columns: minmax(0, 1fr); }
+
+.performance-bands {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+.performance-bands h2 { margin-bottom: var(--space-8); }
+.performance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+}
+.performance-note {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: var(--space-16);
+  align-items: start;
+  padding: var(--space-16) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.performance-note .count { font-variant-numeric: tabular-nums lining-nums; }
+.performance-note p { overflow-wrap: anywhere; }
