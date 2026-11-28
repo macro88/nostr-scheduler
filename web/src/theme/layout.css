@@ -2094,3 +2094,73 @@ html[data-board-drag],
 html[data-board-drag] * {
   cursor: grabbing;
 }
+.remix-layout { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: 100%; }
+.remix-layout h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 700; }
+.remix-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: var(--space-32);
+  align-items: start;
+  min-width: 0;
+}
+.remix-list h2,
+.source-pane h2,
+.remix-editor h2 { margin: 0 0 8px; font-size: 16px; line-height: 1.3; font-weight: 700; }
+.research-list { list-style: none; margin: 0; padding: 0; }
+.research-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--space-12) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.research-row:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.research-row[aria-current="true"] .q-preview { font-weight: 700; }
+.research-kind { color: var(--color-muted); font-size: 13px; line-height: 1.3; font-weight: 700; }
+.remix-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+.source-pane,
+.remix-editor { min-width: 0; }
+.source-text {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  padding: 18px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-field);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 20px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.source-text:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.remix-editor .editor { max-width: none; min-height: 220px; }
+.remix-editor .composer-foot { max-width: none; }
+.copy-status { min-height: 1.4em; margin: 8px 0 0; font-size: 14px; line-height: 1.4; }
+@media (max-width: 800px) {
+  .remix-body,
+  .remix-work { grid-template-columns: minmax(0, 1fr); }
+}
+html[data-fit="stack"] .remix-body,
+html[data-fit="stack"] .remix-work { grid-template-columns: minmax(0, 1fr); }

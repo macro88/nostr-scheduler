@@ -66,6 +66,8 @@ Outliers, briefs, and source posts are research records. `src/research/store.ts`
 
 The scan keeps up to 50 kind-1 notes per npub and drops a note whose content is blank. Engagement is the number of public replies (kind 1), reposts (kind 6), reactions (kind 7), and zap receipts (kind 9735) that tag the note. Each kind counts once, with equal weight. `scoreOutlier` divides that count by the mean engagement of the author's other notes in the window. When that mean is 0, the multiplier is the post's own count. The scan stores an `OutlierHit` when the multiplier is at least 2. A later scan replaces that profile's outlier hits and leaves briefs and source posts in place. The Outliers screen lists the hits for the open profile. Choosing a row shows the author, the multiplier, and the note. Approval stays on Inbox. A missing watch file changes nothing. No configured relay changes nothing. A relay that does not answer leaves the stored hits unchanged.
 
+The Research screen shows one record as read-only source text beside an editor. Save to drafts calls `POST /api/drafts` and stores a manual draft. `POST /api/research/:id/remix` sets `remixedAt` on that row. The first stamp stays if the call runs again. The research row does not become a work item. Schedule the saved draft from Compose, then sign it. Publish still waits until fire time.
+
 ## MCP
 
 The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`, `suggest_post`, and `list_queue`. A test fails if that list changes or if a tool name contains `sign` or `publish`. `suggest_post` writes a suggestion. It does not approve, sign, or enqueue. `list_queue` is read-only.
