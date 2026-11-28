@@ -1,10 +1,14 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { InputError, profileId } from "../src/domain/brand.ts";
+import { InputError, profileId, unixSeconds } from "../src/domain/brand.ts";
 import { parseResearchRecord } from "../src/domain/research.ts";
+import { createApp } from "../src/http/app.ts";
+import { createMockSigner } from "../src/mock-signer/index.ts";
 import { ResearchStore } from "../src/research/store.ts";
+
+const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
 const pubkey = "ab".repeat(32);
 const event = "cd".repeat(32);
@@ -128,6 +132,85 @@ describe("ResearchStore", () => {
       ]);
     } finally {
       store.close();
+    }
+  });
+});
+
+function writeProfile(dir: string, signer: ReturnType<typeof createMockSigner>) {
+  const criteria = join(dir, "criteria.md");
+  writeFileSync(criteria, example.replace("profile_id: example", "profile_id: demo"));
+  writeFileSync(
+    join(dir, "profiles.yaml"),
+    [
+      "profiles:",
+      "  - id: demo",
+      "    label: Demo",
+      `    npub: ${signer.npub}`,
+      `    pubkey: ${signer.pubkey}`,
+      "    suggester_id: demo-suggester",
+      "    signer:",
+      "      kind: mock",
+      "    relays:",
+      "      - ws://127.0.0.1:9",
+      "    read_nip65: false",
+      "    criteria_path: criteria.md",
+      "",
+    ].join("\n"),
+  );
+}
+
+async function authed(app: ReturnType<typeof createApp>["app"]) {
+  const opened = await app.request("http://127.0.0.1:4173/api/session", { headers: { host: "127.0.0.1:4173" } });
+  const body = (await opened.json()) as { token: string };
+  const cookie = opened.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const headers = {
+    host: "127.0.0.1:4173",
+    origin: "http://127.0.0.1:4173",
+    cookie,
+    "x-csrf-token": body.token,
+    "content-type": "application/json",
+  };
+  return {
+    get: (path: string) => app.request(`http://127.0.0.1:4173${path}`, { headers: { host: headers.host, cookie } }),
+    post: (path: string, payload: unknown) =>
+      app.request(`http://127.0.0.1:4173${path}`, { method: "POST", headers, body: JSON.stringify(payload) }),
+  };
+}
+
+describe("GET /api/research", () => {
+  test("lists a fixture and leaves /api/items unchanged", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "research-http-"));
+    writeProfile(dir, createMockSigner());
+    const clock = 1_700_000_000;
+    const { app, research, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    try {
+      const api = await authed(app);
+      const missing = await api.get("/api/research?profileId=missing");
+      expect(missing.status).toBe(400);
+      expect(await (await api.get("/api/research?profileId=demo")).json()).toEqual([]);
+      expect(await (await api.get("/api/items?profileId=demo")).json()).toEqual([]);
+
+      research.insertFixture(source());
+      expect(await (await api.get("/api/items?profileId=demo")).json()).toEqual([]);
+      expect(await (await api.get("/api/research?profileId=demo")).json()).toEqual([source()]);
+
+      const suggested = await api.post("/api/suggestions", {
+        profileId: "demo",
+        rationale: "because",
+        draft: { type: "note", content: "A queued note", proposedFireAt: clock + 30 },
+      });
+      expect(suggested.status).toBe(200);
+      const suggestion = (await suggested.json()) as { id: string };
+      const items = (await (await api.get("/api/items?profileId=demo")).json()) as { id: string; preview: string }[];
+      const listed = (await (await api.get("/api/research?profileId=demo")).json()) as { id: string; kind: string }[];
+
+      expect(items.map((item) => item.id)).toEqual([suggestion.id]);
+      expect(JSON.stringify(items)).not.toContain("res_src01");
+      expect(JSON.stringify(items)).not.toContain("source text");
+      expect(listed).toEqual([source()]);
+      expect(JSON.stringify(listed)).not.toContain(suggestion.id);
+    } finally {
+      close();
     }
   });
 });
