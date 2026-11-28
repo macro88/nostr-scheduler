@@ -1,6 +1,10 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { InputError } from "../src/domain/brand.ts";
+import { InputError, profileId } from "../src/domain/brand.ts";
 import { parseResearchRecord } from "../src/domain/research.ts";
+import { ResearchStore } from "../src/research/store.ts";
 
 const pubkey = "ab".repeat(32);
 const event = "cd".repeat(32);
@@ -101,5 +105,29 @@ describe("parseResearchRecord", () => {
   test("keeps surrounding spaces in post text", () => {
     const parsed = parseResearchRecord(source({ content: "  keep  " }));
     expect(parsed).toMatchObject({ content: "  keep  " });
+  });
+});
+
+describe("ResearchStore", () => {
+  test("round-trips fixtures and filters by profile", () => {
+    const store = new ResearchStore(join(mkdtempSync(join(tmpdir(), "research-")), "research.sqlite"));
+    try {
+      expect(() => store.insertFixture({ kind: "brief" })).toThrow(InputError);
+      expect(store.list()).toEqual([]);
+      store.insertFixture(outlier());
+      store.insertFixture(brief());
+      store.insertFixture(source({ content: "  keep  " }));
+      store.insertFixture(brief({ id: "res_brief02", profileId: "other", title: "Other desk" }));
+      expect(store.list(profileId("demo"))).toEqual([
+        brief(),
+        outlier(),
+        source({ content: "  keep  " }),
+      ]);
+      expect(store.list(profileId("other"))).toEqual([
+        brief({ id: "res_brief02", profileId: "other", title: "Other desk" }),
+      ]);
+    } finally {
+      store.close();
+    }
   });
 });
