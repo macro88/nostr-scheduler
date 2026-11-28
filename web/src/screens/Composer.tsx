@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, Input } from "@macro88/ui";
 import { api, type Item, type Profile } from "../api";
+import { draftsOf, type DraftRow } from "../drafts";
 import { formatQueueWhen, formatWhen, localZoneLabel, startOfWeek } from "../format";
 import { StatusMark } from "../status";
 import { containsPrivateKey, pasteWarning } from "../../../src/domain/private-key.js";
@@ -40,6 +41,11 @@ type ScheduleAttempt = {
   draftId: string | null;
   draft: Snapshot;
   revision: number;
+};
+
+type ReplyCarry = {
+  target: { eventId: string; rootId: string; pubkey: string; relayHint?: string };
+  parent?: { at: number; content: string };
 };
 
 function sameSnapshot(left: Snapshot, right: Snapshot): boolean {
@@ -119,7 +125,9 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
   const [formError, setFormError] = useState<unknown>(null);
   const [unconfirmed, setUnconfirmed] = useState<ScheduleAttempt | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [replyCarry, setReplyCarry] = useState<ReplyCarry | null>(null);
   const scheduling = useRef(false);
+  const draftsMarked = useRef(false);
   const revision = useRef(0);
   const noteNow = useRef(note);
   const whenNow = useRef(when);
@@ -127,6 +135,8 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
   whenNow.current = when;
   useEffect(() => {
     revision.current += 1;
+    setDraftId(null);
+    setReplyCarry(null);
   }, [profile.id]);
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 801px)").matches);
   useEffect(() => {
@@ -139,10 +149,22 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
     queryKey: ["items", profile.id],
     queryFn: () => api<Item[]>(`/api/items?profileId=${profile.id}`),
   });
+  if (queue.isSuccess && !draftsMarked.current) {
+    draftsMarked.current = true;
+    performance.mark("drafts-data-ready");
+  }
+  useLayoutEffect(() => {
+    if (!queue.isSuccess || performance.getEntriesByName("drafts-data-ready").length === 0) return;
+    if (performance.getEntriesByName("drafts-list-paint").length > 0) return;
+    performance.mark("drafts-painted");
+    performance.measure("drafts-list-paint", "drafts-data-ready", "drafts-painted");
+  }, [queue.isSuccess, queue.data]);
   const weekStart = Math.floor(startOfWeek(new Date()).getTime() / 1000);
   const weekEnd = weekStart + 7 * 24 * 60 * 60;
   const stored = (queue.data ?? []).filter((item) => ["draft", "suggestion", "approved", "signed", "queued", "sent", "failed", "missed"].includes(item.status));
-  const upcoming = stored
+  const drafts = draftsOf(stored, profile.id);
+  const scheduled = stored.filter((item) => item.status !== "draft");
+  const upcoming = scheduled
     .filter((item) => {
       const at = item.fireAt[0] ?? 0;
       return at >= weekStart && at < weekEnd;
@@ -158,7 +180,8 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
   const texts = kind === "note" ? [note] : kind === "reply" ? [reply] : parts;
   const blocked = texts.some((value) => containsPrivateKey(value));
   const draftText = text.trim();
-  const matchesSaved = upcoming.some((item) => item.status === "draft" && item.preview === draftText && item.fireAt[0] === when);
+  const livePreview = kind === "thread" ? parts.join("\n") : kind === "reply" ? reply : note;
+  const matchesSaved = drafts.some((row) => row.preview === livePreview && row.fireAt === when);
   const queueRows = draftText && !blocked && !matchesSaved
     ? [...upcoming, { id: "composer-draft", fireAt: [when], preview: draftText, status: "suggestion" }].sort(
         (left, right) => (left.fireAt[0] ?? 0) - (right.fireAt[0] ?? 0),
@@ -172,8 +195,9 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
     if (texts.some((value) => containsPrivateKey(value))) throw new Error(pasteWarning);
     if (kind === "note") return { type: "note", content: note, proposedFireAt: fireAt };
     if (kind === "thread") return { type: "thread", segments: parts.map((content, index) => ({ content, proposedFireAt: fireAt + index })) };
-    const target = JSON.parse(contextTarget(context, ref)) as { eventId: string; rootId: string; pubkey: string; relayHint?: string };
-    return { type: "reply", content: reply, proposedFireAt: fireAt, target };
+    const parsed = JSON.parse(contextTarget(context, ref)) as { eventId: string; rootId: string; pubkey: string; relayHint?: string };
+    const carried = replyCarry && replyCarry.target.eventId === parsed.eventId ? replyCarry : null;
+    return { type: "reply", content: reply, proposedFireAt: fireAt, target: carried ? carried.target : parsed, ...(carried?.parent ? { parent: carried.parent } : {}) };
   }
 
   const save = useMutation({
@@ -239,6 +263,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
       if (button) flyScheduleChip(button, formatWhen(whenNow.current));
       setFormError(null);
       setDraftId(null);
+      setReplyCarry(null);
       setNote("");
       setParts(["", ""]);
       setReply("");
@@ -273,6 +298,58 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
     },
     onError: (error) => setFormError(error),
   });
+
+  function blankEditor() {
+    revision.current += 1;
+    setDraftId(null);
+    setReplyCarry(null);
+    setKind("note");
+    setNote("");
+    setParts(["", ""]);
+    setReply("");
+    setRef("");
+    setContext("");
+    setFormError(null);
+    setWhen(Math.floor(Date.now() / 1000) + 60 * 60);
+    window.setTimeout(() => editor.current?.focus(), 0);
+  }
+
+  function loadDraft(row: DraftRow) {
+    const draft = row.draft;
+    revision.current += 1;
+    setUnconfirmed(null);
+    setFormError(null);
+    setDraftId(row.id);
+    setReplyCarry(null);
+    setRef("");
+    setContext("");
+    if (draft.type === "thread" && draft.segments && draft.segments.length > 0) {
+      setKind("thread");
+      setParts(draft.segments.map((segment) => segment.content));
+      const first = draft.segments[0]?.proposedFireAt;
+      if (typeof first === "number") setWhen(first);
+      setNote("");
+      setReply("");
+    } else if (draft.type === "reply") {
+      setKind("reply");
+      setReply(draft.content ?? "");
+      if (typeof draft.proposedFireAt === "number") setWhen(draft.proposedFireAt);
+      setNote("");
+      setParts(["", ""]);
+      if (draft.target) {
+        setRef(draft.target.eventId);
+        setContext(`${draft.target.eventId}\nby ${draft.target.pubkey}`);
+        setReplyCarry({ target: draft.target, ...(draft.parent ? { parent: draft.parent } : {}) });
+      }
+    } else {
+      setKind("note");
+      setNote(draft.content ?? "");
+      if (typeof draft.proposedFireAt === "number") setWhen(draft.proposedFireAt);
+      setParts(["", ""]);
+      setReply("");
+    }
+    window.setTimeout(() => editor.current?.focus(), 0);
+  }
 
   function shownDraft(): Snapshot | null {
     try {
@@ -350,7 +427,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
         ) : null}
         {kind === "reply" ? (
           <div>
-            <Input label="Note id or nevent" data-testid="note-ref" placeholder="Note id or nevent" value={ref} onChange={(event) => setRef(event.target.value)} />
+            <Input label="Note id or nevent" data-testid="note-ref" placeholder="Note id or nevent" value={ref} onChange={(event) => { setReplyCarry(null); setRef(event.target.value); }} />
             <Button
               type="button"
               variant="outline"
@@ -441,6 +518,38 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
         </div>
       </section>
       <aside className="queue-pane" aria-label="Upcoming">
+        <section className="drafts-pane" aria-labelledby="drafts-heading" data-testid="drafts-desk">
+          <div className="pane-head">
+            <h2 id="drafts-heading">Drafts</h2>
+            <button type="button" className="text-link" data-testid="new-draft" onClick={blankEditor}>
+              New note
+            </button>
+          </div>
+          {drafts.length === 0 && queue.isSuccess ? <p data-testid="drafts-empty">No saved drafts.</p> : null}
+          {drafts.length > 0 ? (
+            <ul className="draft-list">
+              {drafts.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    className="draft-row"
+                    data-testid="draft-row"
+                    data-draft-id={row.id}
+                    aria-current={draftId === row.id ? "true" : undefined}
+                    onClick={() => loadDraft(row)}
+                  >
+                    <time dateTime={new Date(row.fireAt * 1000).toISOString()}>
+                      <span className="when-unit">{formatQueueWhen(row.fireAt)}</span>
+                      <span className="when-unit">{localZoneLabel(row.fireAt)}</span>
+                    </time>
+                    <span className="q-preview note-md">{row.preview}</span>
+                    <StatusMark status="draft" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
         <div className="pane-head">
           <h2>Upcoming</h2>
           <button type="button" className="text-link" data-testid="view-queue" onClick={() => onViewQueue?.()}>
@@ -448,7 +557,7 @@ export function Composer({ profile, onRepair, onViewQueue, headingId }: { profil
           </button>
         </div>
         {queue.isPending && !queue.data ? <p data-testid="rail-loading">Loading queue…</p> : null}
-        {queueRows.length === 0 && !queue.isPending ? <p>{stored.length === 0 ? "No notes in the queue." : "No notes scheduled this week."}</p> : null}
+        {queueRows.length === 0 && !queue.isPending ? <p>{scheduled.length === 0 ? "No notes in the queue." : "No notes scheduled this week."}</p> : null}
         <div className="rail-summary">
           {queueRows[0] ? (
             <div className="rail-next">

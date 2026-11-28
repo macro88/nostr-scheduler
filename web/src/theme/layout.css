@@ -637,6 +637,35 @@ textarea.editor[aria-invalid="true"]:focus-visible,
 .queue-pane .text-link {
   min-width: 0;
 }
+.drafts-pane { margin-bottom: var(--space-16); }
+.draft-list { list-style: none; margin: 0; padding: 0; }
+.queue-pane .draft-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--space-12) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.queue-pane .draft-row time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-8);
+}
+.queue-pane .draft-row:focus-visible {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+.queue-pane .draft-row[aria-current="true"] .q-preview { font-weight: 700; }
 .rail-summary,
 .rail-next {
   min-width: 0;
