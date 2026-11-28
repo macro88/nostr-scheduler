@@ -214,3 +214,66 @@ describe("GET /api/research", () => {
     }
   });
 });
+
+function summarize(samples: readonly number[]): { median: number; max: number } {
+  const ordered = [...samples].sort((left, right) => left - right);
+  return { median: ordered[2] ?? 0, max: ordered[4] ?? 0 };
+}
+
+describe("research list timing", () => {
+  test("lists 200 stored rows under the sqlite fail line", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "research-bench-"));
+    writeProfile(dir, createMockSigner());
+    const { app, research, close } = createApp({ dataDir: dir, now: () => unixSeconds(createdAt) });
+    try {
+      for (let index = 0; index < 200; index += 1) {
+        research.insertFixture(
+          outlier({
+            id: `res_${index.toString(16).padStart(4, "0")}`,
+            content: `note ${index}`,
+          }),
+        );
+      }
+      const warmup = research.list(profileId("demo"));
+      expect(warmup).toHaveLength(200);
+      const sqlite: number[] = [];
+      for (let run = 0; run < 5; run += 1) {
+        const start = performance.now();
+        const rows = research.list(profileId("demo"));
+        const elapsed = performance.now() - start;
+        const last = rows.find((row) => row.id === "res_00c7");
+        if (rows.length !== 200 || last?.kind !== "outlier" || last.content !== "note 199" || last.signals.replies !== 4) {
+          throw new Error("timed list did not return the stored rows");
+        }
+        sqlite.push(elapsed);
+      }
+      const http: number[] = [];
+      for (let run = 0; run < 5; run += 1) {
+        const start = performance.now();
+        const response = await app.request("http://127.0.0.1:4173/api/research?profileId=demo", {
+          headers: { host: "127.0.0.1:4173" },
+        });
+        const body: unknown = await response.json();
+        const elapsed = performance.now() - start;
+        const rows = Array.isArray(body) ? body : [];
+        const last = rows.find((row) => typeof row === "object" && row !== null && "id" in row && row.id === "res_00c7");
+        const content = typeof last === "object" && last !== null && "content" in last ? last.content : undefined;
+        const replies =
+          typeof last === "object" && last !== null && "signals" in last && typeof last.signals === "object" && last.signals !== null && "replies" in last.signals
+            ? last.signals.replies
+            : undefined;
+        if (response.status !== 200 || rows.length !== 200 || content !== "note 199" || replies !== 4) {
+          throw new Error("timed request did not return the stored rows");
+        }
+        http.push(elapsed);
+      }
+      const sqliteSummary = summarize(sqlite);
+      const httpSummary = summarize(http);
+      console.log(JSON.stringify({ unit: "ms", rows: 200, sqlite, sqliteSummary, http, httpSummary }));
+      expect(sqliteSummary.max, "sqlite list of 200 rows must stay under 200 ms").toBeLessThan(200);
+      expect(httpSummary.max, "GET /api/research of 200 rows must stay under 200 ms").toBeLessThan(200);
+    } finally {
+      close();
+    }
+  });
+});
