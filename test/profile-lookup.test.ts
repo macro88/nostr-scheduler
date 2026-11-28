@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { InputError } from "../src/domain/brand.ts";
+import { InputError, unixSeconds } from "../src/domain/brand.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import {
   classifyPost,
+  lookupProfile,
   lookupSubject,
   profileMetadata,
   profilePatterns,
@@ -44,7 +45,7 @@ describe("profilePatterns", () => {
     expect(patterns.mix).toEqual({ note: 3, reply: 1, quote: 0, repost: 0 });
     expect(patterns.cadence).toEqual({
       posts: 4,
-      spanSeconds: 200_000,
+      windowSeconds: 200_000,
       postsPerWeek: (4 * 604_800) / 200_000,
       medianGapSeconds: 86_400,
     });
@@ -79,13 +80,13 @@ describe("profilePatterns", () => {
   test("has no weekly rate for one post or one timestamp", () => {
     expect(profilePatterns([post(50, "only bitcoin here", "note")]).cadence).toEqual({
       posts: 1,
-      spanSeconds: 0,
+      windowSeconds: 0,
       postsPerWeek: null,
       medianGapSeconds: null,
     });
     expect(
       profilePatterns([post(50, "bitcoin one", "note"), post(50, "bitcoin two", "note")]).cadence,
-    ).toMatchObject({ posts: 2, spanSeconds: 0, postsPerWeek: null, medianGapSeconds: null });
+    ).toMatchObject({ posts: 2, windowSeconds: 0, postsPerWeek: null, medianGapSeconds: null });
   });
 });
 
@@ -98,6 +99,22 @@ describe("profileMetadata", () => {
     });
     expect(profileMetadata("not json")).toEqual({ name: null, about: null });
     expect(profileMetadata(JSON.stringify({ name: "  ", about: "" }))).toEqual({ name: null, about: null });
+  });
+});
+
+describe("lookupProfile", () => {
+  test("an empty relay list does not read", async () => {
+    const signer = createMockSigner(mode);
+    const report = await lookupProfile({
+      npub: signer.npub,
+      pubkey: signer.pubkey,
+      relays: [],
+      now: unixSeconds(1_700_000_000),
+    });
+    expect(report.relayQueries).toBe(0);
+    expect(report.cadence.posts).toBe(0);
+    expect(report.metadata).toEqual({ name: null, about: null });
+    expect(report.pillars).toEqual([]);
   });
 });
 

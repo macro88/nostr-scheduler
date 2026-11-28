@@ -165,7 +165,7 @@ describe("profile lookup on a local relay", () => {
         expect(report.metadata).toEqual({ name: "Ada Lovelace", about: "Public notes about relays." });
         expect(report.cadence).toEqual({
           posts: 5,
-          spanSeconds: 345_600,
+          windowSeconds: 345_600,
           postsPerWeek: (5 * 604_800) / 345_600,
           medianGapSeconds: 86_400,
         });

@@ -107,7 +107,7 @@ export type ProfileMetadata = {
 
 export type Cadence = {
   readonly posts: number;
-  readonly spanSeconds: number;
+  readonly windowSeconds: number;
   readonly postsPerWeek: number | null;
   readonly medianGapSeconds: number | null;
 };
@@ -222,7 +222,7 @@ export function profilePatterns(posts: readonly LookupPost[]): ProfilePatterns {
   times.sort((left, right) => left - right);
   const first = times[0];
   const last = times[times.length - 1];
-  const spanSeconds = first === undefined || last === undefined || times.length < 2 ? 0 : last - first;
+  const windowSeconds = first === undefined || last === undefined || times.length < 2 ? 0 : last - first;
   const gaps: number[] = [];
   for (let index = 1; index < times.length; index += 1) {
     const previous = times[index - 1];
@@ -230,12 +230,12 @@ export function profilePatterns(posts: readonly LookupPost[]): ProfilePatterns {
     if (previous === undefined || next === undefined) continue;
     gaps.push(next - previous);
   }
-  const rated = times.length >= 2 && spanSeconds > 0;
+  const rated = times.length >= 2 && windowSeconds > 0;
   return {
     cadence: {
       posts: times.length,
-      spanSeconds,
-      postsPerWeek: rated ? (times.length * WEEK_SECONDS) / spanSeconds : null,
+      windowSeconds,
+      postsPerWeek: rated ? (times.length * WEEK_SECONDS) / windowSeconds : null,
       medianGapSeconds: rated ? median(gaps) : null,
     },
     mix,
