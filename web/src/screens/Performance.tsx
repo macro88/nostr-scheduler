@@ -88,8 +88,17 @@ function formatMultiplier(value: number): string {
   return `${text}×`;
 }
 
+function countWord(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function signalLine(signals: Signals): string {
-  return `${signals.replies} replies, ${signals.reposts} reposts, ${signals.reactions} reactions, ${signals.zaps} zaps`;
+  return [
+    countWord(signals.replies, "reply", "replies"),
+    countWord(signals.reposts, "repost", "reposts"),
+    countWord(signals.reactions, "reaction", "reactions"),
+    countWord(signals.zaps, "zap", "zaps"),
+  ].join(", ");
 }
 
 function NoteList({ notes }: { notes: readonly PerformanceNote[] }) {
@@ -170,7 +179,7 @@ export function Performance({ profileId }: { profileId: string }) {
               <Band notes={bottom} testId="band-bottom" />
               {middle > 0 ? (
                 <p className="page-kicker" data-testid="band-middle">
-                  {middle} {middle === 1 ? "note sits" : "notes sit"} between the bands.
+                  {middle === 1 ? "1 note is between the bands." : `${middle} notes are between the bands.`}
                 </p>
               ) : null}
             </>
