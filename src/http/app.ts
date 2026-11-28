@@ -16,6 +16,7 @@ import { loadProfiles } from "../profiles/load.ts";
 import { publicSigner } from "../profiles/load.ts";
 import { setProfileSigner } from "../profiles/save.ts";
 import { publishDue } from "../publisher/publish.ts";
+import { ResearchStore } from "../research/store.ts";
 import { publishToRelay } from "../test-relay/client.ts";
 import type { Profile, UnixSeconds } from "../domain/types.ts";
 import { WorkStore } from "../work/store.ts";
@@ -84,6 +85,7 @@ function itemView(item: ReturnType<WorkStore["get"]>) {
 export function createApp(options: AppOptions) {
   const profilesPath = join(options.dataDir, "profiles.yaml");
   const store = new WorkStore(join(options.dataDir, "app.sqlite"));
+  const research = new ResearchStore(join(options.dataDir, "research.sqlite"));
   const now = () => options.now?.() ?? systemNow();
   const guard = createGuard();
   const listeners = new Set<Listener>();
@@ -138,6 +140,10 @@ export function createApp(options: AppOptions) {
     const profileId = c.req.query("profileId");
     const items = store.list(profileId ? profile(profileId).id : undefined).map(itemView);
     return c.json(items);
+  });
+  app.get("/api/research", (c) => {
+    const profileId = c.req.query("profileId");
+    return c.json(research.list(profileId ? profile(profileId).id : undefined));
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());
@@ -376,5 +382,14 @@ export function createApp(options: AppOptions) {
     app.use("/*", serveStatic({ root: options.staticDir }));
     app.get("*", serveStatic({ path: join(options.staticDir, "index.html") }));
   }
-  return { app, store, close: () => store.close(), notify };
+  return {
+    app,
+    store,
+    research,
+    close: () => {
+      research.close();
+      store.close();
+    },
+    notify,
+  };
 }

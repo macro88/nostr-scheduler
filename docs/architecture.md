@@ -17,6 +17,7 @@ src/domain/        types, parsers, state transitions
 src/criteria/      criteria files and the feedback log
 src/profiles/      profile files
 src/work/          SQLite inbox, queue, and publish log
+src/research/      outliers, briefs, and source posts
 src/signers/       NIP-07, NIP-46, and the NIP-55 refusal
 src/publisher/     fire at created_at, retries, sent and failed
 src/mcp/           loopback tool server
@@ -57,6 +58,10 @@ An item is `sent` when at least one relay accepts it. Relays that refuse are ret
 
 Threads go out root first. A later event still waits for its own `created_at`.
 
+## Research
+
+Outliers, briefs, and source posts are research records. `src/research/store.ts` stores them in `data/research.sqlite`. `GET /api/research` lists the records. A `profileId` query limits the list to one profile. `/api/items` reads `data/app.sqlite` only. No MCP tool reads or writes research records. Signing and publishing do not read `data/research.sqlite`.
+
 ## MCP
 
 The server exposes exactly `list_profiles`, `get_criteria`, `get_thread_context`, `suggest_post`, and `list_queue`. A test fails if that list changes or if a tool name contains `sign` or `publish`. `suggest_post` writes a suggestion. It does not approve, sign, or enqueue. `list_queue` is read-only.
@@ -68,6 +73,7 @@ data/profiles.yaml
 data/criteria/<id>.md
 data/criteria/<id>.feedback.yaml
 data/app.sqlite
+data/research.sqlite
 data/nip46/client.json    # only when file storage was explicitly opted in
 ```
 
