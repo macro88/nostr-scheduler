@@ -65,17 +65,18 @@ export function App() {
     const outer = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const editor = focusNote.current ? document.querySelector<HTMLElement>("[data-testid='note-text']") : null;
-        focusNote.current = false;
         const title = document.getElementById("section-title");
         const target = editor ?? title;
         if (!target) return;
+        focusNote.current = false;
         const options: FocusOptions = {};
         Object.assign(options, { focusVisible: true });
         target.focus(options);
       });
     });
     return () => window.cancelAnimationFrame(outer);
-  }, [returnFocus]);
+    // Retry when Compose mounts after first-run profile save (profiles query settles).
+  }, [returnFocus, selected?.id, view, manage, repair]);
 
   useEffect(() => {
     const source = new EventSource("/api/events");
