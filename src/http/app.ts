@@ -74,6 +74,7 @@ function itemView(item: ReturnType<WorkStore["get"]>) {
     fireAt: fireTimes(item),
     preview: previewOf(item),
     rationale: "rationale" in item ? item.rationale : undefined,
+    createdAt: "createdAt" in item ? item.createdAt : undefined,
     reason: "reason" in item ? item.reason : undefined,
     draft: "draft" in item ? item.draft : undefined,
     events,
