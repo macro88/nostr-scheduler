@@ -16,6 +16,7 @@ import { loadProfiles } from "../profiles/load.ts";
 import { publicSigner } from "../profiles/load.ts";
 import { setProfileSigner } from "../profiles/save.ts";
 import { publishDue } from "../publisher/publish.ts";
+import { scanPerformance } from "../research/performance.ts";
 import { ResearchStore } from "../research/store.ts";
 import { publishToRelay } from "../test-relay/client.ts";
 import type { Profile, UnixSeconds } from "../domain/types.ts";
@@ -153,6 +154,17 @@ export function createApp(options: AppOptions) {
     const next = research.markRemixed(id, now());
     notify();
     return c.json(next);
+  });
+  app.get("/api/performance", async (c) => {
+    const profileId = c.req.query("profileId");
+    if (!profileId) throw new InputError("profileId", "Choose a profile.");
+    const owner = profile(profileId);
+    const report = await scanPerformance({
+      pubkey: owner.pubkey,
+      relays: owner.relays.configured,
+      now: now(),
+    });
+    return c.json(report);
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());

@@ -107,7 +107,7 @@ test("moving a writing note to Ready approves it and does not publish", async ({
   });
   expect(narrow.overflow).toBe(0);
   expect(narrow.stacked).toBe(true);
-  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers"]) {
+  for (const name of ["inbox", "compose", "board", "calendar", "log", "sign", "outliers", "research", "performance"]) {
     const box = await page.getByTestId(`nav-${name}`).boundingBox();
     expect(box, name).toBeTruthy();
     if (!box) continue;
