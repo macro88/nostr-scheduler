@@ -99,11 +99,12 @@ node src/cli/main.ts reject <id> --reason "..."
 node src/cli/main.ts edit <id> --content "..."
 node src/cli/main.ts sign
 node src/cli/main.ts publish
+node src/cli/main.ts research scan [profile]
 node src/cli/main.ts mcp
 node src/cli/main.ts disconnect
 ```
 
-`sign` signs every approved item, root first for a thread, then queues the signed events. `publish` sends due events and will not send early. `publish --watch` repeats that check once a second. `mcp` speaks newline-delimited JSON-RPC on standard input.
+`sign` signs every approved item, root first for a thread, then queues the signed events. `publish` sends due events and will not send early. `publish --watch` repeats that check once a second. `mcp` speaks newline-delimited JSON-RPC on standard input. `research scan` reads `data/watch/<profile-id>.txt` and stores outlier hits. The file lists one public npub per line. Blank lines and `#` comments are ignored. The scan uses that profile's configured relays. It does not approve or sign.
 
 ## Local UI
 
@@ -121,7 +122,7 @@ To bump the design system, replace each tarball URL in both files, check the new
 
 The inbox lists suggestions for the selected profile. Approve, edit, or reject them there. A rejection is written to that profile's feedback file after a short undo. Compose schedules a note, a thread, or a reply, then clears the editor. The queue shows the week or the day, with the current time marked. An unsigned time can move. A signed time is frozen, and removing a signed or queued item asks you to confirm over the rest of the page.
 
-Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. The schedule control is that same form, not the browser's time field. Keys 1 to 5 switch sections. In the inbox, J and K to move, A to approve, E to edit, R to reject. Control or Command and Enter schedules from the editor. Escape closes a panel. Single-key shortcuts can be turned off, and the choice is kept in this browser.
+Times use British English and a 24-hour clock, for example Wed 11 Nov, 14:30. The schedule control is that same form, not the browser's time field. Keys 1 to 6 switch sections. Key 6 opens Outliers. That screen lists public notes whose engagement is at least twice the mean of that author's other recent notes. Choosing a row shows the author, the multiplier, and the note. Approval stays on Inbox. In the inbox, J and K to move, A to approve, E to edit, R to reject. Control or Command and Enter schedules from the editor. Escape closes a panel. Single-key shortcuts can be turned off, and the choice is kept in this browser.
 
 If a change fails, the page says what to do next. The technical detail stays behind a disclosure. Signing says how far through a batch you are only when more than one note is being signed.
 
