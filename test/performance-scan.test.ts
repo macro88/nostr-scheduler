@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { availableParallelism, loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,12 +8,13 @@ import { relayUrl, unixSeconds } from "../src/domain/brand.ts";
 import type { RawEvent } from "../src/domain/event.ts";
 import { createApp } from "../src/http/app.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
-import { assignPerformanceBands } from "../src/research/performance.ts";
+import { assignPerformanceBands, scanPerformance } from "../src/research/performance.ts";
 import { loadAuthorNotes, loadSignalTallies } from "../src/research/public-notes.ts";
-import { scanPerformance } from "../src/research/performance.ts";
 import { LocalRelay } from "../src/test-relay/relay.ts";
 
 const createdAt = 1_700_000_000;
+const mode = { NOSTR_SCHEDULER_MODE: "test" };
+const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
 function textOf(data: RawData): string {
   if (Array.isArray(data)) return Buffer.concat(data).toString("utf8");
@@ -22,7 +23,8 @@ function textOf(data: RawData): string {
 }
 
 function writeProfile(dir: string, signer: ReturnType<typeof createMockSigner>, relay: string) {
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(join(dir, "criteria"), { recursive: true });
+  writeFileSync(join(dir, "criteria", "demo.md"), example.replace("profile_id: example", "profile_id: demo"));
   writeFileSync(
     join(dir, "profiles.yaml"),
     [
@@ -37,6 +39,7 @@ function writeProfile(dir: string, signer: ReturnType<typeof createMockSigner>, 
       "    relays:",
       `      - ${relay}`,
       "    read_nip65: false",
+      "    criteria_path: criteria/demo.md",
       "",
     ].join("\n"),
   );
@@ -134,9 +137,9 @@ describe("operator performance on a local relay", () => {
     const url = await relay.start();
     try {
       const dir = mkdtempSync(join(tmpdir(), "performance-live-"));
-      const operator = createMockSigner();
-      const reactor = createMockSigner();
-      const other = createMockSigner();
+      const operator = createMockSigner(mode);
+      const reactor = createMockSigner(mode);
+      const other = createMockSigner(mode);
       writeProfile(dir, operator, url);
       const at = (offset: number) => unixSeconds(createdAt + offset);
       const note = (offset: number, content: string) =>
@@ -212,9 +215,11 @@ describe("operator performance on a local relay", () => {
         const suggested = await api.post("/api/suggestions", {
           profileId: "demo",
           rationale: "because",
-          draft: { type: "note", content: "A queued note", proposedFireAt: createdAt + 100 },
+          draft: { type: "note", content: "A queued note", proposedFireAt: createdAt + 3_600 },
         });
-        expect(suggested.status).toBe(200);
+        if (suggested.status !== 200) {
+          throw new Error(`suggest failed ${suggested.status}: ${await suggested.text()}`);
+        }
         const again = (await (await api.get("/api/performance?profileId=demo")).json()) as PerformanceReport;
         expect(again.notes).toHaveLength(10);
         expect(JSON.stringify(again.notes)).not.toContain("A queued note");
@@ -231,7 +236,7 @@ describe("operator performance on a local relay", () => {
   test("a dead relay is an error, not an empty band", async () => {
     const port = await closedPort();
     const dir = mkdtempSync(join(tmpdir(), "performance-down-"));
-    const operator = createMockSigner();
+    const operator = createMockSigner(mode);
     writeProfile(dir, operator, `ws://127.0.0.1:${port}`);
     const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(createdAt) });
     try {
@@ -250,8 +255,8 @@ describe("performance scan timing", () => {
     const relay = new LocalRelay();
     const url = await relay.start();
     const dir = mkdtempSync(join(tmpdir(), "performance-perf-"));
-    const operator = createMockSigner();
-    const reactor = createMockSigner();
+    const operator = createMockSigner(mode);
+    const reactor = createMockSigner(mode);
     writeProfile(dir, operator, url);
     const notes: RawEvent[] = [];
     const reactions: RawEvent[] = [];
