@@ -130,4 +130,97 @@ describe("local api", () => {
     close();
     await relay.stop();
   });
+
+  test("reschedule moves a saved draft and keeps it a draft", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    writeProfile(dir, signer, "ws://127.0.0.1:9");
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    const saved = await api.post("/api/drafts", {
+      profileId: "demo",
+      draft: { type: "note", content: "Held note", proposedFireAt: clock + 3600 },
+    });
+    const draft = (await saved.json()) as { id: string; status: string; fireAt: number[]; preview: string };
+    expect(saved.status, JSON.stringify(draft)).toBe(200);
+    expect(draft).toMatchObject({ status: "draft", fireAt: [clock + 3600], preview: "Held note" });
+
+    const moved = await api.post(`/api/items/${draft.id}/reschedule`, { fireAt: clock + 7200 });
+    const body = (await moved.json()) as { status: string; fireAt: number[]; preview: string; draft?: { proposedFireAt?: number } };
+    expect(moved.status, JSON.stringify(body)).toBe(200);
+    expect(body).toMatchObject({
+      status: "draft",
+      fireAt: [clock + 7200],
+      preview: "Held note",
+      draft: { type: "note", content: "Held note", proposedFireAt: clock + 7200 },
+    });
+
+    const listed = (await (await api.get("/api/items?profileId=demo")).json()) as { id: string; status: string; fireAt: number[] }[];
+    expect(listed.find((item) => item.id === draft.id)).toMatchObject({ status: "draft", fireAt: [clock + 7200] });
+    close();
+  });
+
+  test("reschedule still moves a suggestion and an approved note", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    writeProfile(dir, signer, "ws://127.0.0.1:9");
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    const suggested = await api.post("/api/suggestions", {
+      profileId: "demo",
+      rationale: "because",
+      draft: { type: "note", content: "Suggested note", proposedFireAt: clock + 3600 },
+    });
+    const suggestion = (await suggested.json()) as { id: string; status: string };
+    expect(suggested.status).toBe(200);
+    const suggestionMoved = await api.post(`/api/items/${suggestion.id}/reschedule`, { fireAt: clock + 5400 });
+    expect(suggestionMoved.status).toBe(200);
+    expect(await suggestionMoved.json()).toMatchObject({ status: "suggestion", fireAt: [clock + 5400], preview: "Suggested note" });
+
+    const composed = await api.post("/api/compose", {
+      profileId: "demo",
+      draft: { type: "note", content: "Approved note", proposedFireAt: clock + 3600 },
+    });
+    const approved = (await composed.json()) as { id: string; status: string };
+    expect(composed.status).toBe(200);
+    const approvedMoved = await api.post(`/api/items/${approved.id}/reschedule`, { fireAt: clock + 9000 });
+    expect(approvedMoved.status).toBe(200);
+    expect(await approvedMoved.json()).toMatchObject({ status: "approved", fireAt: [clock + 9000], preview: "Approved note" });
+    close();
+  });
+
+  test("reschedule refuses a queued note and leaves its time", async () => {
+    const dir = tempDir();
+    const signer = createMockSigner();
+    writeProfile(dir, signer, "ws://127.0.0.1:9");
+    const clock = 1_700_000_000;
+    const { app, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    const api = await authed(app);
+    const composed = await api.post("/api/compose", {
+      profileId: "demo",
+      draft: { type: "note", content: "Queued note", proposedFireAt: clock + 3600 },
+    });
+    const created = (await composed.json()) as { id: string };
+    expect(composed.status).toBe(200);
+    const next = await api.post("/api/sign/nip07/next", { profileId: "demo" });
+    const waiting = (await next.json()) as { unsigned: Parameters<typeof signer.signEvent>[0] };
+    expect(next.status, JSON.stringify(waiting)).toBe(200);
+    const signed = await signer.signEvent(waiting.unsigned);
+    const submitted = await api.post("/api/sign/nip07/submit", { itemId: created.id, event: signed });
+    const queued = (await submitted.json()) as { done?: boolean; item?: { status: string } };
+    expect(submitted.status, JSON.stringify(queued)).toBe(200);
+    expect(queued.done).toBe(true);
+    expect(queued.item?.status).toBe("queued");
+
+    const frozen = await api.post(`/api/items/${created.id}/reschedule`, { fireAt: clock + 7200 });
+    expect(frozen.status).toBe(409);
+    expect(await frozen.json()).toEqual({
+      error: "A signed event is frozen. Discard it and sign again to choose a new time.",
+    });
+    const rows = (await (await api.get("/api/items?profileId=demo")).json()) as { status: string; fireAt: number[] }[];
+    expect(rows).toEqual([expect.objectContaining({ status: "queued", fireAt: [clock + 3600] })]);
+    close();
+  });
 });
