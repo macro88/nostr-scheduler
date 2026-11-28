@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ProfileId } from "../domain/brand.ts";
+import type { ProfileId, ResearchId } from "../domain/brand.ts";
 import { parseResearchRecord, type ResearchRecord } from "../domain/research.ts";
 
 export class ResearchStore {
@@ -27,10 +27,30 @@ export class ResearchStore {
 
   insertFixture(value: unknown): ResearchRecord {
     const record = parseResearchRecord(value);
-    this.db
-      .prepare("INSERT INTO research_records (id, profile_id, kind, body_json) VALUES (?, ?, ?, ?)")
-      .run(record.id, record.profileId, record.kind, JSON.stringify(record));
+    this.write(record, "insert");
     return record;
+  }
+
+  put(value: unknown): ResearchRecord {
+    const record = parseResearchRecord(value);
+    this.write(record, "replace");
+    return record;
+  }
+
+  delete(id: ResearchId): void {
+    this.db.prepare("DELETE FROM research_records WHERE id = ?").run(id);
+  }
+
+  private write(record: ResearchRecord, mode: "insert" | "replace"): void {
+    const sql =
+      mode === "insert"
+        ? "INSERT INTO research_records (id, profile_id, kind, body_json) VALUES (?, ?, ?, ?)"
+        : `INSERT INTO research_records (id, profile_id, kind, body_json) VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             profile_id = excluded.profile_id,
+             kind = excluded.kind,
+             body_json = excluded.body_json`;
+    this.db.prepare(sql).run(record.id, record.profileId, record.kind, JSON.stringify(record));
   }
 
   list(profileId?: ProfileId): ResearchRecord[] {

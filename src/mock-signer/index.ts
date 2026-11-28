@@ -1,14 +1,19 @@
 import { schnorr } from "@noble/curves/secp256k1.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { WebSocket, type RawData } from "ws";
-import { hexPubkey, unixSeconds, type HexPubkey, type RelayUrl } from "../domain/brand.ts";
+import { hexPubkey, unixSeconds, type HexPubkey, type RelayUrl, type UnixSeconds } from "../domain/brand.ts";
 import { npubFromPubkey } from "../domain/bech32.ts";
-import { canonicalId, parseRawEvent, parseSignedEvent } from "../domain/event.ts";
+import { canonicalId, parseRawEvent, parseSignedEvent, type RawEvent } from "../domain/event.ts";
 import { runtimeMode } from "../mode.ts";
-import type { Npub, SignedEvent, Signer, UnsignedEvent } from "../domain/types.ts";
+import type { EventTag, Npub, SignedEvent, Signer, UnsignedEvent } from "../domain/types.ts";
 import { createSession, decryptPayload, encryptPayload, signKind24133 } from "../signers/nip46-session.ts";
 
-export function createMockSigner(env: NodeJS.ProcessEnv = process.env): Signer & { npub: Npub } {
+export function createMockSigner(
+  env: NodeJS.ProcessEnv = process.env,
+): Signer & {
+  npub: Npub;
+  signFixture(body: { kind: number; created_at: UnixSeconds; tags: readonly EventTag[]; content: string }): RawEvent;
+} {
   if (runtimeMode(env) === "production") {
     throw new Error("mock signer is available only in test or demo mode");
   }
@@ -27,6 +32,22 @@ export function createMockSigner(env: NodeJS.ProcessEnv = process.env): Signer &
       const id = canonicalId(event);
       const sig = bytesToHex(schnorr.sign(hexToBytes(id), secretKey));
       return parseSignedEvent({ ...event, id, sig });
+    },
+    signFixture(body): RawEvent {
+      if (runtimeMode(env) === "production") {
+        throw new Error("mock signer is available only in test or demo mode");
+      }
+      if (!Number.isInteger(body.kind) || body.kind < 0) throw new Error("fixture kind must be a non-negative integer");
+      const event = {
+        pubkey,
+        created_at: body.created_at,
+        kind: body.kind,
+        tags: body.tags,
+        content: body.content,
+      };
+      const id = canonicalId(event);
+      const sig = bytesToHex(schnorr.sign(hexToBytes(id), secretKey));
+      return parseRawEvent({ ...event, id, sig });
     },
   };
 }

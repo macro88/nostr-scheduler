@@ -7,13 +7,14 @@ import { Calendar } from "./screens/Calendar";
 import { Composer } from "./screens/Composer";
 import { Inbox } from "./screens/Inbox";
 import { Log } from "./screens/Log";
+import { Outliers } from "./screens/Outliers";
 import { FirstRun } from "./screens/FirstRun";
 import { ProfileSettings } from "./screens/ProfileSettings";
 import { Sign } from "./screens/Sign";
 import { useTheme } from "./theme/mode";
 import { Toaster } from "./toasts";
 
-const views = ["inbox", "compose", "calendar", "log", "sign"] as const;
+const views = ["inbox", "compose", "calendar", "log", "sign", "outliers"] as const;
 type View = (typeof views)[number];
 
 export function App() {
@@ -38,6 +39,7 @@ export function App() {
     calendar: "Queue",
     log: "Log",
     sign: "Sign",
+    outliers: "Outliers",
   };
 
   useEffect(() => {
@@ -86,6 +88,7 @@ export function App() {
       if (event.key === "3") setView("calendar");
       if (event.key === "4") setView("log");
       if (event.key === "5") setView("sign");
+      if (event.key === "6") setView("outliers");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -293,6 +296,7 @@ export function App() {
           <Calendar profileId={selected.id} canSend={(selected.relays ?? []).some((item) => item.publish)} />
         ) : null}
         {selected && !manage && !repair && view === "log" ? <Log /> : null}
+        {selected && !manage && !repair && view === "outliers" ? <Outliers profileId={selected.id} /> : null}
         {selected && !manage && !repair && view === "sign" ? <Sign profile={selected} /> : null}
       </main>
     </>

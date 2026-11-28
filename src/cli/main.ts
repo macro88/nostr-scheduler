@@ -11,6 +11,9 @@ import type { Draft, Profile, Signer } from "../domain/types.ts";
 import { serveMcp } from "../mcp/server.ts";
 import { loadProfiles } from "../profiles/load.ts";
 import { publishDue } from "../publisher/publish.ts";
+import { scanOutliers } from "../research/scan.ts";
+import { ResearchStore } from "../research/store.ts";
+import { loadWatchAuthors } from "../research/watch.ts";
 import { signApproved, systemNow } from "../signers/batch.ts";
 import { connectBunker } from "../signers/nip46.ts";
 import { wipeSession } from "../signers/nip46-session.ts";
@@ -94,7 +97,7 @@ async function main(): Promise<void> {
   const [command, first, second] = positionals;
   if (!command || command === "help") {
     console.log(
-      "commands: criteria validate <file> | status | approve <id> | reject <id> | edit <id> | sign [id] | publish | mcp | disconnect",
+      "commands: criteria validate <file> | status | approve <id> | reject <id> | edit <id> | sign [id] | publish | research scan [profile] | mcp | disconnect",
     );
     return;
   }
@@ -131,6 +134,32 @@ async function main(): Promise<void> {
     }
     if (command === "mcp") {
       serveMcp({ profiles, store, now });
+      return;
+    }
+    if (command === "research" && first === "scan") {
+      const research = new ResearchStore(join(dataDir, "research.sqlite"));
+      try {
+        const targets = second ? [profileFor(profiles, second)] : profiles;
+        for (const owner of targets) {
+          const authors = loadWatchAuthors(dataDir, owner.id);
+          if (authors === null) {
+            console.log(`${owner.id} no watch list`);
+            continue;
+          }
+          const result = await scanOutliers({
+            profileId: owner.id,
+            authors,
+            relays: owner.relays.configured,
+            store: research,
+            now: now(),
+          });
+          console.log(
+            `${owner.id} authors ${result.authors} notes ${result.notes} hits ${result.hits.length} queries ${result.relayQueries}`,
+          );
+        }
+      } finally {
+        research.close();
+      }
       return;
     }
     if (command === "approve" || command === "reject" || command === "edit") {

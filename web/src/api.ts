@@ -23,6 +23,20 @@ export type Profile = {
   queuedOrSigned?: number;
 };
 
+export type ResearchOutlier = {
+  kind: "outlier";
+  id: string;
+  profileId: string;
+  authorPubkey: string;
+  eventId: string;
+  content: string;
+  multiplier: number;
+  baseline: number;
+  signals: { replies: number; reposts: number; reactions: number; zaps: number };
+  createdAt: number;
+  scannedAt: number;
+};
+
 export type Item = {
   id: string;
   profileId: string;
