@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { InputError, suggestionId } from "../domain/brand.ts";
+import { InputError, researchId, suggestionId } from "../domain/brand.ts";
 import { parseDraft } from "../domain/draft.ts";
 import { signAheadSeconds } from "../domain/defaults.ts";
 import { assertValueHasNoPrivateKey, containsPrivateKey, PrivateKeyInContentError } from "../domain/private-key.ts";
@@ -144,6 +144,14 @@ export function createApp(options: AppOptions) {
   app.get("/api/research", (c) => {
     const profileId = c.req.query("profileId");
     return c.json(research.list(profileId ? profile(profileId).id : undefined));
+  });
+  app.post("/api/research/:id/remix", (c) => {
+    const id = researchId(c.req.param("id"));
+    const current = research.get(id);
+    profile(current.profileId);
+    const next = research.markRemixed(id, now());
+    notify();
+    return c.json(next);
   });
   app.post("/api/suggestions", async (c) => {
     const body = suggestionSchema.parse(await c.req.json());

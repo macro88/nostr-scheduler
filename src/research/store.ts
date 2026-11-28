@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ProfileId, ResearchId } from "../domain/brand.ts";
+import { InputError, type ProfileId, type ResearchId, type UnixSeconds } from "../domain/brand.ts";
 import { parseResearchRecord, type ResearchRecord } from "../domain/research.ts";
 
 export class ResearchStore {
@@ -10,6 +10,7 @@ export class ResearchStore {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
+    this.db.exec("PRAGMA busy_timeout = 3000");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS research_records (
         id TEXT PRIMARY KEY,
@@ -39,6 +40,23 @@ export class ResearchStore {
 
   delete(id: ResearchId): void {
     this.db.prepare("DELETE FROM research_records WHERE id = ?").run(id);
+  }
+
+  get(id: ResearchId): ResearchRecord {
+    const row = this.db.prepare("SELECT body_json FROM research_records WHERE id = ?").get(id);
+    if (row === undefined || typeof row !== "object" || row === null) throw new InputError("id", "no research record");
+    const body = "body_json" in row ? row.body_json : undefined;
+    if (typeof body !== "string") throw new InputError("id", "no research record");
+    const parsed: unknown = JSON.parse(body);
+    return parseResearchRecord(parsed);
+  }
+
+  markRemixed(id: ResearchId, at: UnixSeconds): ResearchRecord {
+    const current = this.get(id);
+    if (current.remixedAt !== undefined) return current;
+    const next = { ...current, remixedAt: at };
+    this.db.prepare("UPDATE research_records SET body_json = ? WHERE id = ?").run(JSON.stringify(next), id);
+    return next;
   }
 
   private write(record: ResearchRecord, mode: "insert" | "replace"): void {

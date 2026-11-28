@@ -2,11 +2,14 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { InputError, profileId, unixSeconds } from "../src/domain/brand.ts";
+import { InputError, profileId, researchId, unixSeconds } from "../src/domain/brand.ts";
+import { PrivateKeyInContentError } from "../src/domain/private-key.ts";
+import { promoteResearch } from "../src/domain/remix.ts";
 import { parseResearchRecord } from "../src/domain/research.ts";
 import { createApp } from "../src/http/app.ts";
 import { createMockSigner } from "../src/mock-signer/index.ts";
 import { ResearchStore } from "../src/research/store.ts";
+import { readResearchHits } from "../web/src/research.ts";
 
 const example = readFileSync(new URL("../examples/criteria/example-profile.md", import.meta.url), "utf8");
 
@@ -75,6 +78,12 @@ describe("parseResearchRecord", () => {
     expect(withUrl).toMatchObject({ kind: "brief", url: "https://example.com/brief" });
     const remixed = parseResearchRecord(source({ remixedAt: createdAt + 10 }));
     expect(remixed).toMatchObject({ kind: "source", remixedAt: createdAt + 10 });
+    expect(parseResearchRecord(outlier({ remixedAt: createdAt + 10 }))).toMatchObject({ kind: "outlier", remixedAt: createdAt + 10 });
+    expect(parseResearchRecord(brief({ remixedAt: createdAt + 10, url: "https://example.com/brief" }))).toMatchObject({
+      kind: "brief",
+      remixedAt: createdAt + 10,
+      url: "https://example.com/brief",
+    });
   });
 
   test("omits optional brief url and source remix time when they are absent", () => {
@@ -84,7 +93,11 @@ describe("parseResearchRecord", () => {
     expect(parsedSource.kind).toBe("source");
     if (parsedBrief.kind !== "brief" || parsedSource.kind !== "source") return;
     expect(parsedBrief.url).toBeUndefined();
+    expect(parsedBrief.remixedAt).toBeUndefined();
     expect(parsedSource.remixedAt).toBeUndefined();
+    const parsedOutlier = parseResearchRecord(outlier());
+    if (parsedOutlier.kind !== "outlier") return;
+    expect(parsedOutlier.remixedAt).toBeUndefined();
   });
 
   test("rejects malformed payloads", () => {
@@ -102,6 +115,8 @@ describe("parseResearchRecord", () => {
     expect(rejection(brief({ url: "javascript:alert(1)" })).field).toBe("url");
     expect(rejection(brief({ url: "https://user:pass@example.com/a" })).field).toBe("url");
     expect(rejection(source({ remixedAt: -5 })).field).toBe("remixedAt");
+    expect(rejection(outlier({ remixedAt: -5 })).field).toBe("remixedAt");
+    expect(rejection(brief({ remixedAt: 1.5 })).field).toBe("remixedAt");
     expect(rejection(source({ extra: true })).field).toBe("extra");
     expect(rejection(outlier({ content: "" })).field).toBe("content");
   });
@@ -130,9 +145,56 @@ describe("ResearchStore", () => {
       expect(store.list(profileId("other"))).toEqual([
         brief({ id: "res_brief02", profileId: "other", title: "Other desk" }),
       ]);
+      const marked = store.markRemixed(researchId("res_src01"), unixSeconds(createdAt + 10));
+      expect(marked).toMatchObject({ kind: "source", content: "  keep  ", remixedAt: createdAt + 10 });
+      expect(store.markRemixed(researchId("res_src01"), unixSeconds(createdAt + 99))).toMatchObject({ remixedAt: createdAt + 10 });
+      expect(store.get(researchId("res_src01")).remixedAt).toBe(createdAt + 10);
+      expect(() => store.markRemixed(researchId("res_missing"), unixSeconds(createdAt))).toThrow(InputError);
+      const hot = store.markRemixed(researchId("res_out01"), unixSeconds(createdAt + 20));
+      expect(hot).toMatchObject({ kind: "outlier", content: "a hot note", remixedAt: createdAt + 20 });
+      expect(store.list(profileId("demo")).map((row) => row.id)).toEqual(["res_brief01", "res_out01", "res_src01"]);
     } finally {
       store.close();
     }
+  });
+});
+
+const privateMarker = "nsec1notarealkeyxxxxxxxx";
+
+describe("promoteResearch", () => {
+  test("maps a source post to a note draft and refuses private-key text", () => {
+    const when = unixSeconds(createdAt + 3600);
+    const draft = promoteResearch(parseResearchRecord(source()), when);
+    expect(draft).toEqual({ type: "note", content: "source text", proposedFireAt: when });
+    expect(Object.keys(draft).sort()).toEqual(["content", "proposedFireAt", "type"]);
+    expect(JSON.stringify(draft)).not.toContain(privateMarker);
+    expect(promoteResearch(parseResearchRecord(outlier()), when)).toEqual({
+      type: "note",
+      content: "a hot note",
+      proposedFireAt: when,
+    });
+    expect(promoteResearch(parseResearchRecord(brief({ url: "https://example.com/brief" })), when)).toEqual({
+      type: "note",
+      content: "Morning brief\n\nFive notes worth a look.\n\nhttps://example.com/brief",
+      proposedFireAt: when,
+    });
+    expect(() => promoteResearch(parseResearchRecord(source({ content: `see ${privateMarker}` })), when)).toThrow(PrivateKeyInContentError);
+  });
+
+  test("keeps research hits and drops a work item", () => {
+    const hits = readResearchHits([
+      source(),
+      outlier(),
+      brief({ url: "https://example.com/brief" }),
+      { status: "queued", id: "sug_demo01", content: "not research" },
+      { kind: "source", id: "res_blank", content: "   " },
+      { kind: "note", id: "res_note01", content: "wrong kind" },
+    ]);
+    expect(hits).toEqual([
+      { kind: "source", id: "res_src01", content: "source text" },
+      { kind: "outlier", id: "res_out01", content: "a hot note", multiplier: 3.5 },
+      { kind: "brief", id: "res_brief01", title: "Morning brief", summary: "Five notes worth a look.", url: "https://example.com/brief" },
+    ]);
   });
 });
 
@@ -209,6 +271,52 @@ describe("GET /api/research", () => {
       expect(JSON.stringify(items)).not.toContain("source text");
       expect(listed).toEqual([source()]);
       expect(JSON.stringify(listed)).not.toContain(suggestion.id);
+    } finally {
+      close();
+    }
+  });
+});
+
+describe("POST /api/research/:id/remix", () => {
+  test("saves a promoted outlier as a draft and leaves the research row unqueued", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "research-remix-"));
+    writeProfile(dir, createMockSigner());
+    const clock = 1_700_000_000;
+    const { app, research, store, close } = createApp({ dataDir: dir, now: () => unixSeconds(clock) });
+    try {
+      const api = await authed(app);
+      research.insertFixture(outlier());
+      const when = unixSeconds(clock + 3600);
+      const draft = promoteResearch(parseResearchRecord(outlier()), when);
+      const refused = await api.post("/api/drafts", {
+        profileId: "demo",
+        draft: { ...draft, content: `see ${privateMarker}` },
+      });
+      expect(refused.status).toBe(400);
+      expect(store.list(profileId("demo"))).toEqual([]);
+
+      const saved = await api.post("/api/drafts", { profileId: "demo", draft });
+      const body = (await saved.json()) as { id: string; status: string; origin: string; preview: string };
+      expect(saved.status, JSON.stringify(body)).toBe(200);
+      expect(body).toMatchObject({ status: "draft", origin: "manual", preview: "a hot note" });
+
+      const marked = await api.post("/api/research/res_out01/remix", {});
+      const row = (await marked.json()) as { kind: string; remixedAt?: number; content: string };
+      expect(marked.status, JSON.stringify(row)).toBe(200);
+      expect(row).toMatchObject({ kind: "outlier", content: "a hot note", remixedAt: clock });
+
+      const again = await api.post("/api/research/res_out01/remix", {});
+      expect(await again.json()).toMatchObject({ remixedAt: clock });
+
+      const items = (await (await api.get("/api/items?profileId=demo")).json()) as { id: string; status: string }[];
+      expect(items.map((item) => ({ id: item.id, status: item.status }))).toEqual([{ id: body.id, status: "draft" }]);
+      expect(items.some((item) => item.status === "queued" || item.status === "approved" || item.status === "signed")).toBe(false);
+      const listed = (await (await api.get("/api/research?profileId=demo")).json()) as { id: string; kind: string; remixedAt?: number }[];
+      expect(listed).toEqual([{ ...outlier(), remixedAt: clock }]);
+
+      const missing = await api.post("/api/research/res_missing/remix", {});
+      expect(missing.status).toBe(400);
+      expect(store.list(profileId("demo")).map((item) => item.status)).toEqual(["draft"]);
     } finally {
       close();
     }

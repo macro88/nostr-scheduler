@@ -32,6 +32,7 @@ export type OutlierHit = {
   readonly signals: OutlierSignals;
   readonly createdAt: UnixSeconds;
   readonly scannedAt: UnixSeconds;
+  readonly remixedAt?: UnixSeconds;
 };
 
 export type BriefItem = {
@@ -42,6 +43,7 @@ export type BriefItem = {
   readonly summary: string;
   readonly url?: string;
   readonly createdAt: UnixSeconds;
+  readonly remixedAt?: UnixSeconds;
 };
 
 export type SourcePost = {
@@ -80,6 +82,7 @@ const outlierSchema = z.strictObject({
   signals: signalsSchema,
   createdAt: seconds,
   scannedAt: seconds,
+  remixedAt: seconds.optional(),
 });
 
 const briefSchema = z.strictObject({
@@ -90,6 +93,7 @@ const briefSchema = z.strictObject({
   summary: text,
   url: z.string().min(1).optional(),
   createdAt: seconds,
+  remixedAt: seconds.optional(),
 });
 
 const sourceSchema = z.strictObject({
@@ -140,7 +144,7 @@ function httpUrl(value: string): string {
 }
 
 function outlierOf(value: z.infer<typeof outlierSchema>): OutlierHit {
-  return {
+  const record: OutlierHit = {
     kind: "outlier",
     id: researchId(value.id),
     profileId: profileId(value.profileId),
@@ -153,6 +157,8 @@ function outlierOf(value: z.infer<typeof outlierSchema>): OutlierHit {
     createdAt: unixSeconds(value.createdAt),
     scannedAt: unixSeconds(value.scannedAt),
   };
+  if (value.remixedAt === undefined) return record;
+  return { ...record, remixedAt: unixSeconds(value.remixedAt) };
 }
 
 function briefOf(value: z.infer<typeof briefSchema>): BriefItem {
@@ -164,8 +170,9 @@ function briefOf(value: z.infer<typeof briefSchema>): BriefItem {
     summary: value.summary,
     createdAt: unixSeconds(value.createdAt),
   };
-  if (value.url === undefined) return record;
-  return { ...record, url: httpUrl(value.url) };
+  const withUrl = value.url === undefined ? record : { ...record, url: httpUrl(value.url) };
+  if (value.remixedAt === undefined) return withUrl;
+  return { ...withUrl, remixedAt: unixSeconds(value.remixedAt) };
 }
 
 function sourceOf(value: z.infer<typeof sourceSchema>): SourcePost {
